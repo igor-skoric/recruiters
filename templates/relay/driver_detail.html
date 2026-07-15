@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% load fleet_ui %}
+
+{% block title %}{{ driver.full_name }} | Fleet Planner{% endblock %}
+
+{% block content %}
+<section class="detail-page">
+    <header class="detail-header">
+        <div>
+            <a href="{% url 'relay:drivers' %}" class="back-link">← Drivers</a>
+            <h1>{{ driver.full_name }}</h1>
+            <p class="text-muted">{{ driver.get_status_display }} · {{ driver.get_driver_type_display }}</p>
+        </div>
+    </header>
+
+    <section class="detail-grid">
+        <article class="card detail-card">
+            <h2>Driver info</h2>
+            <dl class="info-list info-list-compact">
+                <div><dt>Phone</dt><dd>{% if driver.phone %}{{ driver.phone }}{% else %}—{% endif %}</dd></div>
+                <div><dt>Email</dt><dd>{% if driver.email %}{{ driver.email }}{% else %}—{% endif %}</dd></div>
+                <div><dt>Hire date</dt><dd>{% if driver.hire_date %}{{ driver.hire_date|date:"M j, Y" }}{% else %}—{% endif %}</dd></div>
+                <div><dt>Status</dt><dd>{{ driver.get_status_display }}</dd></div>
+                <div><dt>Type</dt><dd>{{ driver.get_driver_type_display }}</dd></div>
+            </dl>
+        </article>
+
+        <article class="card detail-card">
+            <h2>Current truck</h2>
+            {% if current_assignment %}
+                <dl class="info-list info-list-compact">
+                    <div>
+                        <dt>Truck</dt>
+                        <dd>
+                            <a href="{% url 'relay:truck_detail' current_assignment.truck.pk %}">
+                                {{ current_assignment.truck.unit_number }}
+                            </a>
+                        </dd>
+                    </div>
+                    <div><dt>Start</dt><dd>{{ current_assignment.start_date|date:"M j, Y" }}</dd></div>
+                    <div><dt>Expected end</dt><dd>{{ current_assignment.expected_end_date|date:"M j, Y" }}</dd></div>
+                    <div>
+                        <dt>Status</dt>
+                        <dd><span class="badge {{ current_assignment.status|assignment_badge_class }}">{{ current_assignment.get_status_display }}</span></dd>
+                    </div>
+                </dl>
+            {% else %}
+                <p class="card-empty">No active truck assignment.</p>
+            {% endif %}
+        </article>
+
+        <article class="card detail-card">
+            <h2>Next planned truck</h2>
+            {% if next_assignment %}
+                <dl class="info-list info-list-compact">
+                    <div>
+                        <dt>Truck</dt>
+                        <dd>
+                            <a href="{% url 'relay:truck_detail' next_assignment.truck.pk %}">
+                                {{ next_assignment.truck.unit_number }}
+                            </a>
+                        </dd>
+                    </div>
+                    <div><dt>Starts</dt><dd>{{ next_assignment.start_date|date:"M j, Y" }}</dd></div>
+                    <div><dt>Expected end</dt><dd>{{ next_assignment.expected_end_date|date:"M j, Y" }}</dd></div>
+                </dl>
+            {% else %}
+                <p class="card-empty">No planned assignment.</p>
+            {% endif %}
+        </article>
+
+        <article class="card detail-card detail-card-wide">
+            <h2>Status timeline</h2>
+            <div class="period-controls period-controls-inline">
+                <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.prev_start }}&weeks={{ week_count }}">← Prev</a>
+                <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.today_start }}&weeks={{ week_count }}">Today</a>
+                <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.next_start }}&weeks={{ week_count }}">Next →</a>
+            </div>
+            <div class="timeline-legend" style="padding:0 0 0.75rem;">
+                <span class="legend-item"><span class="week-dot dot-otr"></span> OTR</span>
+                <span class="legend-item"><span class="week-dot dot-home"></span> Home</span>
+                <span class="legend-item"><span class="week-dot dot-available"></span> Available</span>
+                <span class="legend-item"><span class="week-dot dot-vacation"></span> Vacation</span>
+                <span class="legend-item"><span class="week-dot dot-inactive"></span> Unavailable</span>
+                <span class="legend-item"><span class="week-dot dot-review"></span> Gap</span>
+            </div>
+            <div class="detail-timeline-scroll">
+                <div class="week-track week-track-detail" style="--week-count: {{ week_count }};">
+                    {% for col in week_columns %}
+                        <div class="week-column week-column-detail{% if col.header.is_current %} week-column-current{% endif %}">
+                            <span class="week-header-cell">{{ col.header.label }}</span>
+                            <span class="week-date-range">{{ col.header.week_start|date:"n/j" }}–{{ col.header.display_end|date:"n/j" }}</span>
+                            <span
+                                class="week-dot week-dot-detail week-cell-detail dot-{{ col.circle.status }}"
+                                title="{{ col.circle.tooltip }}"
+                                aria-label="{{ col.circle.tooltip }}"
+                            ></span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </article>
+
+        <article class="card detail-card detail-card-wide">
+            <h2>Assignment history</h2>
+            {% if assignment_history %}
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Truck</th>
+                                <th>Start</th>
+                                <th>Expected end</th>
+                                <th>Actual end</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for assignment in assignment_history %}
+                                <tr>
+                                    <td><a href="{% url 'relay:truck_detail' assignment.truck.pk %}">{{ assignment.truck.unit_number }}</a></td>
+                                    <td>{{ assignment.start_date|date:"M j, Y" }}</td>
+                                    <td>{{ assignment.expected_end_date|date:"M j, Y" }}</td>
+                                    <td>{% if assignment.actual_end_date %}{{ assignment.actual_end_date|date:"M j, Y" }}{% else %}—{% endif %}</td>
+                                    <td><span class="badge {{ assignment.status|assignment_badge_class }}">{{ assignment.get_status_display }}</span></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="card-empty">No assignments yet.</p>
+            {% endif %}
+        </article>
+
+        <article class="card detail-card detail-card-wide">
+            <h2>Home time / status history</h2>
+            {% if status_periods %}
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Start</th>
+                                <th>End</th>
+                                <th>Assignment truck</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for period in status_periods %}
+                                <tr>
+                                    <td>{{ period.get_status_display }}</td>
+                                    <td>{{ period.start_date|date:"M j, Y" }}</td>
+                                    <td>{% if period.end_date %}{{ period.end_date|date:"M j, Y" }}{% else %}Open{% endif %}</td>
+                                    <td>{% if period.assignment %}{{ period.assignment.truck.unit_number }}{% else %}—{% endif %}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="card-empty">No status periods recorded.</p>
+            {% endif %}
+        </article>
+    </section>
+</section>
+{% endblock %}

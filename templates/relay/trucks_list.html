@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Trucks | Fleet Planner{% endblock %}
+
+{% block content %}
+<section class="list-page">
+    <div class="list-toolbar">
+        <div>
+            <h1>Trucks</h1>
+            <p class="text-muted">{{ trucks|length }} trucks in the fleet</p>
+        </div>
+        {% if can_edit %}
+            <button type="button" class="btn btn-primary" data-modal-open="truck">+ Truck</button>
+        {% endif %}
+    </div>
+
+    <section class="card" style="padding:0;overflow:hidden;">
+        {% if trucks %}
+            <div class="table-wrap" style="border:none;border-radius:0;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Unit</th>
+                            <th>Status</th>
+                            <th>Current driver</th>
+                            <th>Make / Model</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for truck in trucks %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'relay:truck_detail' truck.pk %}">
+                                        <strong>{{ truck.unit_number }}</strong>
+                                    </a>
+                                </td>
+                                <td>{{ truck.get_status_display }}</td>
+                                <td>
+                                    {% if truck.current_driver %}
+                                        <a href="{% url 'relay:driver_detail' truck.current_driver.pk %}">{{ truck.current_driver.full_name }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ truck.make }} {{ truck.model }}</td>
+                                <td>
+                                    <a class="btn btn-secondary-light btn-sm" href="{% url 'relay:truck_detail' truck.pk %}">Open</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="empty-state">No trucks yet.</p>
+        {% endif %}
+    </section>
+</section>
+
+{% if can_edit %}
+{% include "relay/_create_modals.html" %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,115 @@
+<dialog class="app-modal" id="modal-driver" data-open-on-load="{% if open_modal == 'driver' %}1{% endif %}">
+    <form method="post" action="{% url 'relay:driver_create' %}" class="modal-panel">
+        {% csrf_token %}
+        <header class="modal-header">
+            <div class="modal-header-main">
+                <span class="modal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+                </span>
+                <div>
+                    <h2>Add driver</h2>
+                    <p class="help-text">Create a driver for relay planning.</p>
+                </div>
+            </div>
+            <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
+        </header>
+        <div class="modal-body">
+            <div class="modal-form-grid">
+                <div class="form-group">
+                    <label for="{{ driver_form.first_name.id_for_label }}">First name</label>
+                    {{ driver_form.first_name }}
+                    {{ driver_form.first_name.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ driver_form.last_name.id_for_label }}">Last name</label>
+                    {{ driver_form.last_name }}
+                    {{ driver_form.last_name.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ driver_form.phone.id_for_label }}">Phone</label>
+                    {{ driver_form.phone }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ driver_form.email.id_for_label }}">Email</label>
+                    {{ driver_form.email }}
+                    {{ driver_form.email.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ driver_form.status.id_for_label }}">Status</label>
+                    {{ driver_form.status }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ driver_form.driver_type.id_for_label }}">Type</label>
+                    {{ driver_form.driver_type }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ driver_form.hire_date.id_for_label }}">Hire date</label>
+                    {{ driver_form.hire_date }}
+                </div>
+                <div class="form-group form-group-full">
+                    <label for="{{ driver_form.notes.id_for_label }}">Notes</label>
+                    {{ driver_form.notes }}
+                </div>
+            </div>
+        </div>
+        <footer class="modal-footer">
+            <button type="button" class="btn btn-secondary-light" data-modal-close>Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </footer>
+    </form>
+</dialog>
+
+<dialog class="app-modal" id="modal-truck" data-open-on-load="{% if open_modal == 'truck' %}1{% endif %}">
+    <form method="post" action="{% url 'relay:truck_create' %}" class="modal-panel">
+        {% csrf_token %}
+        <header class="modal-header">
+            <div class="modal-header-main">
+                <span class="modal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17h4V5H2v12h3"/><path d="M14 17h5l3-5v-2h-8v7z"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+                </span>
+                <div>
+                    <h2>Add truck</h2>
+                    <p class="help-text">Then use Start Assignment on the truck page.</p>
+                </div>
+            </div>
+            <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
+        </header>
+        <div class="modal-body">
+            <div class="modal-form-grid">
+                <div class="form-group">
+                    <label for="{{ truck_form.unit_number.id_for_label }}">Unit number</label>
+                    {{ truck_form.unit_number }}
+                    {{ truck_form.unit_number.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ truck_form.status.id_for_label }}">Status</label>
+                    {{ truck_form.status }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ truck_form.make.id_for_label }}">Make</label>
+                    {{ truck_form.make }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ truck_form.model.id_for_label }}">Model</label>
+                    {{ truck_form.model }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ truck_form.year.id_for_label }}">Year</label>
+                    {{ truck_form.year }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ truck_form.vin.id_for_label }}">VIN</label>
+                    {{ truck_form.vin }}
+                </div>
+                <div class="form-group form-group-full">
+                    <label for="{{ truck_form.notes.id_for_label }}">Notes</label>
+                    {{ truck_form.notes }}
+                </div>
+            </div>
+        </div>
+        <footer class="modal-footer">
+            <button type="button" class="btn btn-secondary-light" data-modal-close>Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </footer>
+    </form>
+</dialog>

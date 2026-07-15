@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Advanced: Create Assignment | Recruiters{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <h1>Advanced: Create Assignment</h1>
+    <p class="help-text">
+        Secondary workflow for IT admins. The primary flow is
+        <code>sync_protransport_snapshot</code> followed by quick edits on the Relay Board.
+    </p>
+</section>
+
+<section class="card form-card">
+    <form method="post" class="relay-form">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="form-errors">
+                {% for error in form.non_field_errors %}
+                    <p>{{ error }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% for field in form %}
+            <div class="form-group">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}
+                    <div class="field-errors">{{ field.errors }}</div>
+                {% endif %}
+            </div>
+        {% endfor %}
+
+        <div class="form-actions">
+            <a href="{% url 'relay:board' %}" class="btn btn-secondary">Back to Board</a>
+            <button type="submit" class="btn btn-primary">Create Assignment</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

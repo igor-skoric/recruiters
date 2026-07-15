@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% load fleet_ui %}
+
+{% block title %}Fleet Planner | Recruiters{% endblock %}
+
+{% block content %}
+{% kpi_drivers_home_time as home_time_count %}
+{% kpi_cycles_ending_soon fleet_items as ending_soon_count %}
+
+<section class="fleet-page">
+    <div class="fleet-sticky-header">
+        <div class="fleet-toolbar">
+            <div class="fleet-toolbar-top">
+                <div class="fleet-toolbar-title">
+                    <h1>Fleet Planner</h1>
+                    <p class="fleet-toolbar-meta">{{ fleet_summary.total }} trucks · {{ week_count }} weeks · from {{ board_start|date:"M j, Y" }}</p>
+                </div>
+            </div>
+
+            <div class="period-controls">
+                <div class="period-nav">
+                    <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.prev_start }}&weeks={{ week_count }}">← Prev</a>
+                    <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.today_start }}&weeks={{ week_count }}">Today</a>
+                    <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.next_start }}&weeks={{ week_count }}">Next →</a>
+                </div>
+                <div class="period-weeks">
+                    {% for option in period_nav.week_options %}
+                        <a class="btn btn-sm {% if option == week_count %}btn-primary{% else %}btn-secondary-light{% endif %}"
+                           href="?start={{ period_nav.start }}&weeks={{ option }}">{{ option }}w</a>
+                    {% endfor %}
+                </div>
+                <form class="period-year" method="get">
+                    <input type="hidden" name="weeks" value="{{ week_count }}">
+                    <label for="board-year">Year</label>
+                    <input id="board-year" class="form-control form-control-sm" type="number" name="year" value="{{ period_nav.year }}" min="2000" max="2100">
+                    <button type="submit" class="btn btn-secondary-light btn-sm">Go</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="kpi-grid">
+            <article class="kpi-card">
+                <div class="kpi-card-head">
+                    <span class="kpi-label">Total Trucks</span>
+                    <span class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17h4V5H2v12h3"/><path d="M14 17h5l3-5v-2h-8v7z"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
+                </div>
+                <div class="kpi-value">{{ fleet_summary.total }}</div>
+                <div class="kpi-desc">Active fleet units</div>
+            </article>
+            <article class="kpi-card">
+                <div class="kpi-card-head">
+                    <span class="kpi-label">Occupied</span>
+                    <span class="kpi-icon kpi-icon-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+                </div>
+                <div class="kpi-value">{{ fleet_summary.otr }}</div>
+                <div class="kpi-desc">Currently on the road</div>
+            </article>
+            <article class="kpi-card">
+                <div class="kpi-card-head">
+                    <span class="kpi-label">Available</span>
+                    <span class="kpi-icon kpi-icon-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span>
+                </div>
+                <div class="kpi-value">{{ fleet_summary.available }}</div>
+                <div class="kpi-desc">Ready for assignment</div>
+            </article>
+            <article class="kpi-card">
+                <div class="kpi-card-head">
+                    <span class="kpi-label">Needs Planning</span>
+                    <span class="kpi-icon kpi-icon-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="m10.3 3.9-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.1l-8-14a2 2 0 0 0-3.4 0z"/></svg></span>
+                </div>
+                <div class="kpi-value">{{ fleet_summary.needs_review }}</div>
+                <div class="kpi-desc">Missing next driver plan</div>
+            </article>
+            <article class="kpi-card">
+                <div class="kpi-card-head">
+                    <span class="kpi-label">Maintenance</span>
+                    <span class="kpi-icon kpi-icon-muted"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 1 0 5.7l-7.7 7.7-4-4 7.7-7.7a4 4 0 0 1 5.7 0z"/><path d="m5 19 2 2"/></svg></span>
+                </div>
+                <div class="kpi-value">{{ fleet_summary.maintenance }}</div>
+                <div class="kpi-desc">Unavailable units</div>
+            </article>
+            <article class="kpi-card">
+                <div class="kpi-card-head">
+                    <span class="kpi-label">Drivers on Home Time</span>
+                    <span class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg></span>
+                </div>
+                <div class="kpi-value">{{ home_time_count }}</div>
+                <div class="kpi-desc">Drivers resting at home</div>
+            </article>
+            <article class="kpi-card">
+                <div class="kpi-card-head">
+                    <span class="kpi-label">Cycles Ending Soon</span>
+                    <span class="kpi-icon kpi-icon-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+                </div>
+                <div class="kpi-value">{{ ending_soon_count }}</div>
+                <div class="kpi-desc">Within the next 7 days</div>
+            </article>
+        </div>
+
+        <div class="timeline-legend">
+            <span class="legend-item"><span class="week-dot dot-otr"></span> Occupied</span>
+            <span class="legend-item"><span class="week-dot dot-home"></span> Available</span>
+            <span class="legend-item"><span class="week-dot dot-review"></span> Needs planning</span>
+            <span class="legend-item"><span class="week-dot dot-inactive"></span> Unavailable</span>
+            <span class="legend-item"><span class="week-column-current-sample"></span> This week</span>
+        </div>
+    </div>
+
+    {% if needs_review_count %}
+        <div class="message message-error message-compact">
+            {{ needs_review_count }} truck{{ needs_review_count|pluralize }} need review.
+        </div>
+    {% endif %}
+
+    <section class="card fleet-board">
+        {% if fleet_items %}
+            <div class="fleet-scroll">
+                <div class="fleet-week-header">
+                    <div class="fleet-cell fleet-sticky-col fleet-col-truck"><span class="fleet-head-label">Truck</span></div>
+                    <div class="fleet-cell fleet-sticky-col fleet-col-driver"><span class="fleet-head-label">Current Driver</span></div>
+                    <div class="fleet-cell"><span class="fleet-head-label">Current Cycle</span></div>
+                    <div class="fleet-cell"><span class="fleet-head-label">Expected End</span></div>
+                    <div class="fleet-cell"><span class="fleet-head-label">Days Left</span></div>
+                    <div class="fleet-cell"><span class="fleet-head-label">Next Driver</span></div>
+                    <div class="fleet-cell"><span class="fleet-head-label">Planning</span></div>
+                    <div class="fleet-cell fleet-col-timeline">
+                        <div class="week-track week-track-header">
+                            {% for col in week_columns_header %}
+                                <div class="week-column week-column-header{% if col.header.is_current %} week-column-current{% endif %}">
+                                    <span class="week-header-cell">{{ col.header.label }}</span>
+                                    <span class="week-date-range">{{ col.header.week_start|date:"n/j" }}–{{ col.header.display_end|date:"n/j" }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="fleet-cell"><span class="fleet-head-label">Actions</span></div>
+                </div>
+
+                {% for item in fleet_items %}
+                    {% with row=item.row %}
+                    <div class="fleet-row {% if row.needs_review %}fleet-row-review{% endif %}">
+                        <div class="fleet-cell fleet-sticky-col fleet-col-truck">
+                            <a class="fleet-truck-number" href="{% url 'relay:truck_detail' row.truck.pk %}">{{ row.truck.unit_number }}</a>
+                        </div>
+                        <div class="fleet-cell fleet-sticky-col fleet-col-driver">
+                            {% if row.current_driver %}
+                                <a class="fleet-driver-link" href="{% url 'relay:driver_detail' row.current_driver.pk %}">{{ row.current_driver.full_name }}</a>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </div>
+                        <div class="fleet-cell fleet-cell-muted">
+                            {% if row.cycle_start_date %}{{ row.cycle_start_date|date:"M j, Y" }}{% else %}—{% endif %}
+                        </div>
+                        <div class="fleet-cell fleet-cell-muted">
+                            {% if row.expected_home_date %}{{ row.expected_home_date|date:"M j, Y" }}{% else %}—{% endif %}
+                        </div>
+                        <div class="fleet-cell {% if row.days_left is not None and row.days_left <= 7 %}fleet-days-urgent{% endif %}">
+                            {% if row.days_left is not None %}{{ row.days_left }}d{% else %}—{% endif %}
+                        </div>
+                        <div class="fleet-cell">
+                            {% if row.next_driver %}
+                                <a href="{% url 'relay:driver_detail' row.next_driver.pk %}">{{ row.next_driver.full_name }}</a>
+                            {% else %}
+                                <span class="text-muted">Open</span>
+                            {% endif %}
+                        </div>
+                        <div class="fleet-cell">
+                            {% planning_badge row %}
+                        </div>
+                        <div class="fleet-cell fleet-col-timeline">
+                            <div class="week-track fleet-week-track">
+                                {% for col in item.week_columns %}
+                                    <div class="week-column{% if col.header.is_current %} week-column-current{% endif %}">
+                                        <span
+                                            class="week-dot week-cell dot-{{ col.circle.status }}"
+                                            title="{{ col.circle.tooltip }}"
+                                            aria-label="{{ col.circle.tooltip }}"
+                                        ></span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="fleet-cell fleet-actions">
+                            <a class="btn btn-secondary-light btn-sm" href="{% url 'relay:truck_detail' row.truck.pk %}">Open</a>
+                        </div>
+                    </div>
+                    {% endwith %}
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="empty-state">No trucks yet. Add a truck to start planning.</p>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}

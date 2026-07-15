@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Assignment — {{ assignment.truck.unit_number }} | Recruiters{% endblock %}
+
+{% block content %}
+<section class="page-header relay-header">
+    <div>
+        <h1>Assignment — Truck {{ assignment.truck.unit_number }}</h1>
+        <p>{{ assignment.driver.full_name }} · {{ assignment.get_status_display }}</p>
+    </div>
+    <a href="{% url 'relay:board' %}" class="btn btn-secondary">Back to Board</a>
+</section>
+
+<section class="card-grid">
+    <article class="card">
+        <h2>Assignment</h2>
+        <dl class="info-list">
+            <div>
+                <dt>Truck</dt>
+                <dd>{{ assignment.truck.unit_number }}</dd>
+            </div>
+            <div>
+                <dt>Driver</dt>
+                <dd>{{ assignment.driver.full_name }}</dd>
+            </div>
+            <div>
+                <dt>Status</dt>
+                <dd><span class="badge badge-status-{{ assignment.status }}">{{ assignment.get_status_display }}</span></dd>
+            </div>
+            <div>
+                <dt>Cycle</dt>
+                <dd>{{ assignment.cycle_weeks }} weeks OTR + {{ assignment.home_time_weeks }} week home time</dd>
+            </div>
+        </dl>
+    </article>
+
+    <article class="card">
+        <h2>Dates</h2>
+        <dl class="info-list">
+            <div>
+                <dt>Start date</dt>
+                <dd>{{ assignment.start_date|date:"M j, Y" }}</dd>
+            </div>
+            <div>
+                <dt>Expected home time</dt>
+                <dd>{{ assignment.expected_end_date|date:"M j, Y" }}</dd>
+            </div>
+            <div>
+                <dt>Actual end date</dt>
+                <dd>
+                    {% if assignment.actual_end_date %}
+                        {{ assignment.actual_end_date|date:"M j, Y" }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt>Days until home time</dt>
+                <dd>
+                    {% if assignment.days_until_home_time is not None %}
+                        {{ assignment.days_until_home_time }} days
+                    {% else %}
+                        —
+                    {% endif %}
+                </dd>
+            </div>
+        </dl>
+    </article>
+
+    <article class="card">
+        <h2>Relay chain</h2>
+        <dl class="info-list">
+            <div>
+                <dt>Previous assignment</dt>
+                <dd>
+                    {% if assignment.previous_assignment %}
+                        <a href="{% url 'relay:assignment_detail' assignment.previous_assignment.pk %}">
+                            {{ assignment.previous_assignment.driver.full_name }}
+                        </a>
+                    {% else %}
+                        —
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt>Next driver</dt>
+                <dd>
+                    {% if assignment.next_assignment %}
+                        <a href="{% url 'relay:assignment_detail' assignment.next_assignment.pk %}">
+                            {{ assignment.next_assignment.driver.full_name }}
+                        </a>
+                        (starts {{ assignment.next_assignment.start_date|date:"M j, Y" }})
+                    {% else %}
+                        Not assigned
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt>Created by</dt>
+                <dd>
+                    {% if assignment.created_by %}
+                        {{ assignment.created_by.full_name }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </dd>
+            </div>
+        </dl>
+    </article>
+</section>
+
+{% if assignment.notes %}
+    <section class="card">
+        <h2>Notes</h2>
+        <p>{{ assignment.notes|linebreaksbr }}</p>
+    </section>
+{% endif %}
+
+{% if can_edit and assignment.status == "active" %}
+    <section class="card">
+        <h2>Actions</h2>
+        <form method="post" action="{% url 'relay:assignment_complete' assignment.pk %}">
+            {% csrf_token %}
+            <p>Mark this assignment as completed. Driver goes on home time; truck returns to yard.</p>
+            <button type="submit" class="btn btn-primary">Complete Assignment</button>
+        </form>
+    </section>
+{% endif %}
+{% endblock %}

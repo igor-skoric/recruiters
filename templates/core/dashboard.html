@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | Recruiters{% endblock %}
+
+{% block content %}
+<section class="dashboard-page">
+    <header class="page-header">
+        <h1>Dashboard</h1>
+        <p>Workspace overview for your account.</p>
+    </header>
+
+    <section class="card-grid">
+        <article class="card">
+            <h2>User</h2>
+            <dl class="info-list">
+                <div>
+                    <dt>Full name</dt>
+                    <dd>{{ user_full_name }}</dd>
+                </div>
+                <div>
+                    <dt>Email</dt>
+                    <dd>{{ user.email }}</dd>
+                </div>
+            </dl>
+        </article>
+
+        <article class="card">
+            <h2>Department & Role</h2>
+            <dl class="info-list">
+                <div>
+                    <dt>Department</dt>
+                    <dd>{{ user_department }}</dd>
+                </div>
+                <div>
+                    <dt>Role</dt>
+                    <dd>{{ user_role }}</dd>
+                </div>
+            </dl>
+        </article>
+
+        <article class="card">
+            <h2>Access</h2>
+            <dl class="info-list">
+                <div>
+                    <dt>Access level</dt>
+                    <dd>
+                        <span class="badge {% if user.access_level == 'full' %}badge-full{% else %}badge-read{% endif %}">
+                            {{ user_access_level }}
+                        </span>
+                    </dd>
+                </div>
+                <div>
+                    <dt>Staff access</dt>
+                    <dd>{{ user.is_staff|yesno:"Yes,No" }}</dd>
+                </div>
+            </dl>
+        </article>
+    </section>
+
+    <section class="card">
+        <h2>Quick links</h2>
+        <div class="detail-actions" style="margin-top:0.5rem;">
+            <a class="btn btn-primary" href="{% url 'relay:board' %}">Open Fleet Planner</a>
+            <a class="btn btn-secondary-light" href="{% url 'relay:drivers' %}">Drivers</a>
+            <a class="btn btn-secondary-light" href="{% url 'relay:trucks' %}">Trucks</a>
+        </div>
+    </section>
+</section>
+{% endblock %}
