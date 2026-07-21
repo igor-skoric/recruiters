@@ -4,174 +4,243 @@
 {% block title %}Truck {{ truck.unit_number }} | Fleet Planner{% endblock %}
 
 {% block content %}
-<section class="detail-page">
-    <header class="detail-header">
-        <div>
-            <a href="{% url 'relay:board' %}" class="back-link">← Fleet Planner</a>
-            <h1>Truck {{ truck.unit_number }}</h1>
-            <p class="text-muted">
-                {% if current_assignment %}
-                    {{ current_assignment.driver.full_name }} · {{ current_assignment.start_date|date:"M j, Y" }} – {{ current_assignment.expected_end_date|date:"M j, Y" }}
-                {% else %}
-                    No active assignment
+<section class="td-page">
+    <header class="td-header">
+        <div class="td-header-main">
+            <div class="td-title-row">
+                <h1>Truck {{ truck.unit_number }}</h1>
+                <span class="badge badge-truck-{{ row.truck_status }}">{{ row.truck_status_label }}</span>
+                {% planning_badge row %}
+            </div>
+            <p class="td-header-meta">
+                {% if truck.make or truck.model %}
+                    {{ truck.make }} {{ truck.model }}{% if truck.year %} · {{ truck.year }}{% endif %}
+                {% endif %}
+                {% if truck.vin %}
+                    {% if truck.make or truck.model %} · {% endif %}VIN {{ truck.vin }}
+                {% endif %}
+                {% if not truck.make and not truck.model and not truck.vin %}
+                    <span class="text-muted">No vehicle details on file</span>
                 {% endif %}
             </p>
         </div>
-        <div class="detail-actions">
-            {% planning_badge row %}
+        <div class="td-header-actions">
             {% if can_edit %}
                 {% if show_start_assignment %}
                     <button type="button" class="btn btn-primary" data-modal-open="start-assignment">Start Assignment</button>
-                {% endif %}
-                {% if show_complete %}
+                {% elif show_plan_next %}
                     <button type="button" class="btn btn-primary" data-modal-open="plan-next">Plan Next Driver</button>
-                    <button type="button" class="btn btn-primary" data-modal-open="complete-assignment">Complete Assignment</button>
-                {% endif %}
-                {% if show_planned_actions and not show_complete %}
-                    <button type="button" class="btn btn-primary" data-modal-open="plan-next">Edit Planned</button>
                 {% elif show_planned_actions %}
-                    <button type="button" class="btn btn-secondary-light" data-modal-open="plan-next">Edit Planned</button>
+                    <button type="button" class="btn btn-primary" data-modal-open="plan-next">Edit Planned</button>
+                {% endif %}
+                {% if edit_truck_form %}
+                    <button type="button" class="btn btn-secondary-light" data-modal-open="truck-edit">Edit Truck</button>
                 {% endif %}
             {% endif %}
         </div>
     </header>
 
-    <section class="detail-grid">
-        <article class="card detail-card">
-            <h2>Truck information</h2>
-            <dl class="info-list info-list-compact">
-                <div><dt>Unit</dt><dd>{{ truck.unit_number }}</dd></div>
-                <div><dt>Status</dt><dd>{{ row.truck_status_label }}</dd></div>
-                <div><dt>Make / Model</dt><dd>{{ truck.make }} {{ truck.model }}{% if truck.year %} ({{ truck.year }}){% endif %}</dd></div>
-                <div>
-                    <dt>Notes</dt>
-                    <dd class="info-notes">{% if truck.notes %}{{ truck.notes|linebreaksbr }}{% else %}<span class="text-muted">—</span>{% endif %}</dd>
-                </div>
-            </dl>
-        </article>
+    <section class="td-summary-grid" aria-label="Truck summary">
+        {% if current_assignment %}
+            {% include "relay/components/_assignment_summary_card.html" with label="Current Driver" value=current_assignment.driver.full_name secondary=current_assignment.driver.driver_id tone="current-driver" %}
+            {% include "relay/components/_assignment_summary_card.html" with label="Current Assignment" value=current_cycle_duration secondary=current_assignment.start_date|date:"M j" tone="current-assignment" %}
+        {% else %}
+            {% include "relay/components/_assignment_summary_card.html" with label="Current Driver" value="—" muted=1 tone="current-driver" %}
+            {% include "relay/components/_assignment_summary_card.html" with label="Current Assignment" value="No active assignment" muted=1 tone="current-assignment" %}
+        {% endif %}
 
-        <article class="card detail-card" id="current-assignment">
-            <h2>Current assignment</h2>
-            {% if current_assignment %}
-                <dl class="info-list info-list-compact">
-                    <div>
-                        <dt>Driver</dt>
-                        <dd>
+        {% if next_assignment %}
+            {% include "relay/components/_assignment_summary_card.html" with label="Next Driver" value=next_assignment.driver.full_name secondary=next_assignment.get_status_display tone="next-driver" %}
+            {% include "relay/components/_assignment_summary_card.html" with label="Next Assignment" value=next_cycle_duration secondary=next_assignment.start_date|date:"M j" tone="next-assignment" %}
+        {% else %}
+            {% include "relay/components/_assignment_summary_card.html" with label="Next Driver" value="—" muted=1 tone="next-driver" %}
+            {% include "relay/components/_assignment_summary_card.html" with label="Next Assignment" value="Not planned" muted=1 tone="next-assignment" %}
+        {% endif %}
+
+        {% include "relay/components/_assignment_summary_card.html" with label="Truck Status" value=row.truck_status_label secondary=row.planning_status_label tone="truck-status" %}
+        {% if row.days_left != None %}
+            {% include "relay/components/_assignment_summary_card.html" with label="Days Remaining" value=row.days_left secondary="Until return home" tone="days" %}
+        {% else %}
+            {% include "relay/components/_assignment_summary_card.html" with label="Days Remaining" value="—" muted=1 tone="days" %}
+        {% endif %}
+    </section>
+
+    {% include "relay/components/_assignment_timeline.html" %}
+
+    <section class="td-assignment-panels">
+        <article class="card td-panel td-panel-current" id="current-assignment">
+            <div class="td-panel-head">
+                <div>
+                    <p class="td-panel-kicker">Current Assignment</p>
+                    {% if current_assignment %}
+                        <h2>
                             <a href="{% url 'relay:driver_detail' current_assignment.driver.pk %}">
                                 {{ current_assignment.driver.full_name }}
                             </a>
-                        </dd>
-                    </div>
-                    <div><dt>Start</dt><dd>{{ current_assignment.start_date|date:"M j, Y" }}</dd></div>
-                    <div><dt>Expected end</dt><dd>{{ current_assignment.expected_end_date|date:"M j, Y" }}</dd></div>
+                        </h2>
+                    {% else %}
+                        <h2 class="text-muted">No active assignment</h2>
+                    {% endif %}
+                </div>
+                {% if current_assignment %}
+                    {% include "relay/components/_status_badge.html" with status=current_assignment.status label=current_assignment.get_status_display %}
+                {% endif %}
+            </div>
+
+            {% if current_assignment %}
+                <dl class="td-panel-facts">
                     <div>
-                        <dt>Status</dt>
-                        <dd><span class="badge {{ current_assignment.status|assignment_badge_class }}">{{ current_assignment.get_status_display }}</span></dd>
+                        <dt>Start</dt>
+                        <dd>{{ current_assignment.start_date|date:"M j, Y" }}</dd>
                     </div>
                     <div>
-                        <dt>Notes</dt>
-                        <dd class="info-notes">{% if current_assignment.notes %}{{ current_assignment.notes|linebreaksbr }}{% else %}<span class="text-muted">—</span>{% endif %}</dd>
+                        <dt>Home time</dt>
+                        <dd>{{ current_assignment.expected_end_date|date:"M j, Y" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Duration</dt>
+                        <dd>{{ current_cycle_duration }}</dd>
+                    </div>
+                    <div>
+                        <dt>Rest at home</dt>
+                        <dd>{{ current_assignment.home_time_days }} day{{ current_assignment.home_time_days|pluralize }}</dd>
                     </div>
                 </dl>
+                {% if current_assignment.notes %}
+                    <p class="td-panel-notes">{{ current_assignment.notes|linebreaksbr }}</p>
+                {% endif %}
+                {% if can_edit %}
+                    <div class="td-panel-actions">
+                        {% if home_time_form %}
+                            <button type="button" class="btn btn-primary btn-sm" data-modal-open="edit-home-time">Edit Assignment</button>
+                        {% endif %}
+                        {% if show_complete %}
+                            <button type="button" class="btn btn-secondary-light btn-sm" data-modal-open="complete-assignment">Complete Assignment</button>
+                        {% endif %}
+                    </div>
+                {% endif %}
             {% else %}
-                <p class="card-empty">No active assignment for today.</p>
+                <p class="card-empty">Start an assignment to put this truck on the road.</p>
+                {% if can_edit and show_start_assignment %}
+                    <div class="td-panel-actions">
+                        <button type="button" class="btn btn-primary btn-sm" data-modal-open="start-assignment">Start Assignment</button>
+                    </div>
+                {% endif %}
             {% endif %}
         </article>
 
-        <article class="card detail-card" id="next-assignment">
-            <h2>Next assignment</h2>
-            {% if next_assignment %}
-                <dl class="info-list info-list-compact">
-                    <div>
-                        <dt>Driver</dt>
-                        <dd>
+        <article class="card td-panel td-panel-next" id="next-assignment">
+            <div class="td-panel-head">
+                <div>
+                    <p class="td-panel-kicker">Next Assignment</p>
+                    {% if next_assignment %}
+                        <h2>
                             <a href="{% url 'relay:driver_detail' next_assignment.driver.pk %}">
                                 {{ next_assignment.driver.full_name }}
                             </a>
-                        </dd>
-                    </div>
-                    <div><dt>Starts</dt><dd>{{ next_assignment.start_date|date:"M j, Y" }}</dd></div>
-                    <div><dt>Expected end</dt><dd>{{ next_assignment.expected_end_date|date:"M j, Y" }}</dd></div>
+                        </h2>
+                    {% else %}
+                        <h2 class="text-muted">Open</h2>
+                    {% endif %}
+                </div>
+                {% if next_assignment %}
+                    {% include "relay/components/_status_badge.html" with status=next_assignment.status label=next_assignment.get_status_display %}
+                {% endif %}
+            </div>
+
+            {% if next_assignment %}
+                <dl class="td-panel-facts">
                     <div>
-                        <dt>Status</dt>
-                        <dd><span class="badge {{ next_assignment.status|assignment_badge_class }}">{{ next_assignment.get_status_display }}</span></dd>
+                        <dt>Start</dt>
+                        <dd>{{ next_assignment.start_date|date:"M j, Y" }}</dd>
                     </div>
                     <div>
-                        <dt>Notes</dt>
-                        <dd class="info-notes">{% if next_assignment.notes %}{{ next_assignment.notes|linebreaksbr }}{% else %}<span class="text-muted">—</span>{% endif %}</dd>
+                        <dt>Home time</dt>
+                        <dd>{{ next_assignment.expected_end_date|date:"M j, Y" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Duration</dt>
+                        <dd>{{ next_cycle_duration }}</dd>
+                    </div>
+                    <div>
+                        <dt>Rest at home</dt>
+                        <dd>{{ next_assignment.home_time_days }} day{{ next_assignment.home_time_days|pluralize }}</dd>
                     </div>
                 </dl>
+                {% if next_assignment.notes %}
+                    <p class="td-panel-notes">{{ next_assignment.notes|linebreaksbr }}</p>
+                {% endif %}
+                {% if can_edit and show_planned_actions %}
+                    <div class="td-panel-actions">
+                        <button type="button" class="btn btn-primary btn-sm" data-modal-open="plan-next">Edit Planned</button>
+                        <form method="post" action="{% url 'relay:assignment_cancel_planned' truck.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-secondary-light btn-sm">Cancel Planned</button>
+                        </form>
+                    </div>
+                {% endif %}
             {% else %}
-                <p class="card-empty">No planned follow-on assignment.</p>
-            {% endif %}
-        </article>
-
-        <article class="card detail-card detail-card-wide">
-            <h2>Timeline</h2>
-            <div class="timeline-legend" style="padding:0 0 0.75rem;">
-                <span class="legend-item"><span class="week-dot dot-otr"></span> Occupied</span>
-                <span class="legend-item"><span class="week-dot dot-home"></span> Available</span>
-                <span class="legend-item"><span class="week-dot dot-review"></span> Needs planning</span>
-                <span class="legend-item"><span class="week-dot dot-inactive"></span> Unavailable</span>
-            </div>
-            <div class="detail-timeline-scroll">
-                <div class="week-track week-track-detail" style="--week-count: {{ week_count }};">
-                    {% for col in week_columns %}
-                        <div class="week-column week-column-detail{% if col.header.is_current %} week-column-current{% endif %}">
-                            <span class="week-header-cell">{{ col.header.label }}</span>
-                            <span class="week-date-range">{{ col.header.week_start|date:"n/j" }}–{{ col.header.display_end|date:"n/j" }}</span>
-                            <span
-                                class="week-dot week-dot-detail week-cell-detail dot-{{ col.circle.status }}"
-                                title="{{ col.circle.tooltip }}"
-                                aria-label="{{ col.circle.tooltip }}"
-                            ></span>
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </article>
-
-        <article class="card detail-card detail-card-wide">
-            <h2>Assignment history</h2>
-            {% if assignment_history %}
-                <div class="table-wrap">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Driver</th>
-                                <th>Start</th>
-                                <th>Expected end</th>
-                                <th>Actual end</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for assignment in assignment_history %}
-                                <tr>
-                                    <td>
-                                        <a href="{% url 'relay:driver_detail' assignment.driver.pk %}">
-                                            {{ assignment.driver.full_name }}
-                                        </a>
-                                    </td>
-                                    <td>{{ assignment.start_date|date:"M j, Y" }}</td>
-                                    <td>{{ assignment.expected_end_date|date:"M j, Y" }}</td>
-                                    <td>{% if assignment.actual_end_date %}{{ assignment.actual_end_date|date:"M j, Y" }}{% else %}—{% endif %}</td>
-                                    <td><span class="badge {{ assignment.status|assignment_badge_class }}">{{ assignment.get_status_display }}</span></td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p class="card-empty">No assignments recorded for this truck yet.</p>
+                <p class="card-empty">No planned follow-on assignment yet.</p>
+                {% if can_edit and show_plan_next %}
+                    <div class="td-panel-actions">
+                        <button type="button" class="btn btn-primary btn-sm" data-modal-open="plan-next">Plan Next Driver</button>
+                    </div>
+                {% endif %}
             {% endif %}
         </article>
     </section>
+
+    <article class="card td-history-card">
+        <div class="td-history-head">
+            <h2>Assignment History</h2>
+            <p class="td-timeline-subtitle">Chronological record of assignments for this truck.</p>
+        </div>
+        {% if assignment_history %}
+            <div class="table-wrap td-history-wrap">
+                <table class="data-table td-history-table">
+                    <thead>
+                        <tr>
+                            <th>Driver</th>
+                            <th>Start</th>
+                            <th>Home Time</th>
+                            <th>Actual End</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for assignment in assignment_history %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'relay:driver_detail' assignment.driver.pk %}">
+                                        {{ assignment.driver.full_name }}
+                                    </a>
+                                </td>
+                                <td>{{ assignment.start_date|date:"M j, Y" }}</td>
+                                <td>{{ assignment.expected_end_date|date:"M j, Y" }}</td>
+                                <td>{% if assignment.actual_end_date %}{{ assignment.actual_end_date|date:"M j, Y" }}{% else %}—{% endif %}</td>
+                                <td>{{ assignment|cycle_duration }}</td>
+                                <td>
+                                    {% include "relay/components/_status_badge.html" with status=assignment.status label=assignment.get_status_display %}
+                                </td>
+                                <td>
+                                    <a class="btn btn-secondary-light btn-sm" href="{% url 'relay:driver_detail' assignment.driver.pk %}">View</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="card-empty">No assignments recorded for this truck yet.</p>
+        {% endif %}
+    </article>
 </section>
 
 {% if can_edit and show_start_assignment and start_form %}
 <dialog class="app-modal" id="modal-start-assignment">
-    <form method="post" action="{% url 'relay:assignment_start' truck.pk %}" class="modal-panel">
+    <form method="post" action="{% url 'relay:assignment_start' truck.pk %}" class="modal-panel" data-cycle-form>
         {% csrf_token %}
         <header class="modal-header">
             <div class="modal-header-main">
@@ -180,7 +249,7 @@
                 </span>
                 <div>
                     <h2>Start Assignment</h2>
-                    <p class="help-text">Begin the current OTR cycle for this truck.</p>
+                    <p class="help-text">Set start, return home, and back to work — durations are calculated automatically.</p>
                 </div>
             </div>
             <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
@@ -196,8 +265,13 @@
                     {{ start_form.start_date }}
                 </div>
                 <div class="form-group">
-                    <label for="{{ start_form.cycle_weeks.id_for_label }}">Cycle weeks</label>
-                    {{ start_form.cycle_weeks }}
+                    <label for="{{ start_form.home_time_date.id_for_label }}">Return home / truck free</label>
+                    {{ start_form.home_time_date }}
+                    <p class="help-text cycle-duration" data-cycle-duration>Cycle length: —</p>
+                </div>
+                <div class="form-group">
+                    <label for="{{ start_form.back_to_work_date.id_for_label }}">Back to work</label>
+                    {{ start_form.back_to_work_date }}
                 </div>
                 <div class="form-group form-group-full">
                     <label for="{{ start_form.notes.id_for_label }}">Notes</label>
@@ -213,9 +287,9 @@
 </dialog>
 {% endif %}
 
-{% if can_edit and show_plan_next and plan_form %}
+{% if can_edit and plan_form %}
 <dialog class="app-modal" id="modal-plan-next">
-    <form method="post" action="{% url 'relay:assignment_plan_next' truck.pk %}" class="modal-panel">
+    <form method="post" action="{% url 'relay:assignment_plan_next' truck.pk %}" class="modal-panel" data-cycle-form>
         {% csrf_token %}
         <header class="modal-header">
             <div class="modal-header-main">
@@ -234,14 +308,20 @@
                 <div class="form-group form-group-full">
                     <label for="{{ plan_form.next_driver.id_for_label }}">Next driver</label>
                     {{ plan_form.next_driver }}
+                    <p class="help-text">Type to filter the driver list by name or Driver ID.</p>
                 </div>
                 <div class="form-group">
                     <label for="{{ plan_form.start_date.id_for_label }}">Start date</label>
                     {{ plan_form.start_date }}
                 </div>
                 <div class="form-group">
-                    <label for="{{ plan_form.cycle_weeks.id_for_label }}">Cycle weeks</label>
-                    {{ plan_form.cycle_weeks }}
+                    <label for="{{ plan_form.home_time_date.id_for_label }}">Return home / truck free</label>
+                    {{ plan_form.home_time_date }}
+                    <p class="help-text cycle-duration" data-cycle-duration>Cycle length: —</p>
+                </div>
+                <div class="form-group">
+                    <label for="{{ plan_form.back_to_work_date.id_for_label }}">Back to work</label>
+                    {{ plan_form.back_to_work_date }}
                 </div>
                 <div class="form-group form-group-full">
                     <label for="{{ plan_form.notes.id_for_label }}">Notes</label>
@@ -291,6 +371,118 @@
             <div class="form-group">
                 <label for="actual_end_date">Complete on</label>
                 <input class="form-control" type="date" name="actual_end_date" id="actual_end_date">
+            </div>
+            <div class="form-group">
+                <label for="home_time_days">Days at home (after return)</label>
+                <input
+                    class="form-control"
+                    type="number"
+                    name="home_time_days"
+                    id="home_time_days"
+                    value="{{ current_assignment.home_time_days|default:7 }}"
+                    min="1"
+                    max="60"
+                    required
+                >
+                <p class="help-text">How long this driver stays home after complete (1–60). Default 7.</p>
+            </div>
+        </div>
+        <footer class="modal-footer">
+            <button type="button" class="btn btn-secondary-light" data-modal-close>Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </footer>
+    </form>
+</dialog>
+{% endif %}
+
+{% if can_edit and home_time_form and current_assignment %}
+<dialog class="app-modal" id="modal-edit-home-time">
+    <form method="post" action="{% url 'relay:assignment_update_home_time' truck.pk %}" class="modal-panel" data-cycle-form>
+        {% csrf_token %}
+        <header class="modal-header">
+            <div class="modal-header-main">
+                <span class="modal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+                </span>
+                <div>
+                    <h2>Edit Assignment</h2>
+                    <p class="help-text">
+                        Adjust start, return home (truck free), and back to work for the current driver.
+                    </p>
+                </div>
+            </div>
+            <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
+        </header>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="{{ home_time_form.start_date.id_for_label }}">Start date</label>
+                {{ home_time_form.start_date }}
+            </div>
+            <div class="form-group">
+                <label for="{{ home_time_form.home_time_date.id_for_label }}">Return home / truck free date</label>
+                {{ home_time_form.home_time_date }}
+                <p class="help-text cycle-duration" data-cycle-duration>Cycle length: {{ current_cycle_duration }}</p>
+            </div>
+            <div class="form-group">
+                <label for="{{ home_time_form.back_to_work_date.id_for_label }}">Back to work date</label>
+                {{ home_time_form.back_to_work_date }}
+                <p class="help-text">Days at home are calculated from return home date to back to work date.</p>
+            </div>
+        </div>
+        <footer class="modal-footer">
+            <button type="button" class="btn btn-secondary-light" data-modal-close>Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </footer>
+    </form>
+</dialog>
+{% endif %}
+
+{% if can_edit and edit_truck_form %}
+<dialog class="app-modal" id="modal-truck-edit">
+    <form method="post" action="{{ edit_truck_action }}" class="modal-panel" data-edit-form="truck">
+        {% csrf_token %}
+        <header class="modal-header">
+            <div class="modal-header-main">
+                <span class="modal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </span>
+                <div>
+                    <h2>Edit truck</h2>
+                    <p class="help-text">Update truck details.</p>
+                </div>
+            </div>
+            <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
+        </header>
+        <div class="modal-body">
+            <div class="modal-form-grid">
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.unit_number.id_for_label }}">Unit number</label>
+                    {{ edit_truck_form.unit_number }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.status.id_for_label }}">Status</label>
+                    {{ edit_truck_form.status }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.make.id_for_label }}">Make</label>
+                    {{ edit_truck_form.make }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.model.id_for_label }}">Model</label>
+                    {{ edit_truck_form.model }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.year.id_for_label }}">Year</label>
+                    {{ edit_truck_form.year }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.vin.id_for_label }}">VIN</label>
+                    {{ edit_truck_form.vin }}
+                </div>
+                <div class="form-group form-group-full">
+                    <label for="{{ edit_truck_form.notes.id_for_label }}">Notes</label>
+                    {{ edit_truck_form.notes }}
+                </div>
             </div>
         </div>
         <footer class="modal-footer">

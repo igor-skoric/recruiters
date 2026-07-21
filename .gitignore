@@ -14,8 +14,10 @@ db.sqlite3
 media/
 staticfiles/
 
-# Environment overrides (keep committed templates: .env.local, .env.production, .env.example)
+# Environment overrides (keep only .env.example as a committed template)
 .env
+.env.local
+.env.production
 
 # IDE
 .idea/

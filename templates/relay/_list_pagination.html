@@ -1,0 +1,60 @@
+{% if page_obj.paginator.num_pages > 1 or result_count > page_size_options.0 %}
+<nav class="list-pagination" aria-label="Pagination">
+    <form class="list-page-size" method="get">
+        {% for key, value in filters.items %}
+            {% if key != "per_page" and value %}
+                <input type="hidden" name="{{ key }}" value="{{ value }}">
+            {% endif %}
+        {% endfor %}
+        <label for="{{ page_size_id|default:'page-size' }}">Show</label>
+        <select
+            id="{{ page_size_id|default:'page-size' }}"
+            class="form-control form-control-sm"
+            name="per_page"
+            onchange="this.form.submit()"
+        >
+            {% for size in page_size_options %}
+                <option value="{{ size }}"{% if per_page == size %} selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+        </select>
+        <span class="text-muted">per page</span>
+    </form>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+        <div class="list-pagination-nav">
+            {% if page_obj.has_previous %}
+                <a
+                    class="btn btn-secondary-light btn-sm"
+                    href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}"
+                >← Prev</a>
+            {% else %}
+                <span class="btn btn-secondary-light btn-sm is-disabled" aria-disabled="true">← Prev</span>
+            {% endif %}
+
+            <div class="list-pagination-pages">
+                {% for num in page_numbers %}
+                    {% if num is None %}
+                        <span class="list-pagination-ellipsis">…</span>
+                    {% elif num == page_obj.number %}
+                        <span class="btn btn-primary btn-sm" aria-current="page">{{ num }}</span>
+                    {% else %}
+                        <a
+                            class="btn btn-secondary-light btn-sm"
+                            href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ num }}"
+                        >{{ num }}</a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            {% if page_obj.has_next %}
+                <a
+                    class="btn btn-secondary-light btn-sm"
+                    href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}"
+                >Next →</a>
+            {% else %}
+                <span class="btn btn-secondary-light btn-sm is-disabled" aria-disabled="true">Next →</span>
+            {% endif %}
+        </div>
+    {% endif %}
+</nav>
+{% endif %}

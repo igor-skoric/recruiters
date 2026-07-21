@@ -1,0 +1,120 @@
+{% load fleet_ui %}
+<article class="card td-timeline-card dd-timeline-card">
+    <div class="td-timeline-head">
+        <div class="td-timeline-title">
+            <h2>Driver Timeline</h2>
+            <p class="td-timeline-subtitle">
+                Truck assignments and status periods for this driver.
+            </p>
+        </div>
+        <div class="td-period-controls" role="toolbar" aria-label="Timeline period">
+            <div class="td-period-group">
+                <a class="btn btn-secondary-light btn-sm"
+                   href="?start={{ period_nav.prev_start }}&weeks={{ week_count }}">Prev</a>
+                <a class="btn btn-secondary-light btn-sm"
+                   href="?start={{ period_nav.today_start }}&weeks={{ week_count }}">Today</a>
+                <a class="btn btn-secondary-light btn-sm"
+                   href="?start={{ period_nav.next_start }}&weeks={{ week_count }}">Next</a>
+            </div>
+            <span class="td-period-label">{{ gantt.period_label }}</span>
+            <label class="td-weeks-select">
+                <span class="visually-hidden">Weeks</span>
+                <select onchange="window.location.search='?start={{ period_nav.start }}&weeks='+this.value">
+                    {% for option in period_nav.week_options %}
+                        <option value="{{ option }}" {% if option == week_count %}selected{% endif %}>{{ option }}w</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+    </div>
+
+    {% if not gantt.has_content %}
+        <div class="gantt-empty">
+            <span class="gantt-empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                    <rect x="3" y="5" width="18" height="14" rx="2"/>
+                    <path d="M3 10h18"/>
+                    <path d="M8 3v4M16 3v4"/>
+                </svg>
+            </span>
+            <h3>No timeline activity</h3>
+            <p>No assignments or status periods in this range.</p>
+        </div>
+    {% else %}
+        <div class="gantt-scroll">
+            <div class="gantt-board{% if week_count <= 8 %} gantt-board--fill{% endif %}" style="--gantt-days: {{ gantt.total_days }};">
+                <div class="gantt-corner gantt-sticky-meta"></div>
+                <div class="gantt-headers">
+                    <div class="gantt-week-row">
+                        {% for band in gantt.week_bands %}
+                            <div class="gantt-week-band" style="left: {{ band.left_pct }}%; width: {{ band.width_pct }}%;">
+                                <span class="gantt-week-label">{{ band.label }}</span>
+                                <span class="gantt-week-range">{{ band.week_start|date:"M j" }}–{{ band.display_end|date:"M j" }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <div class="gantt-day-row">
+                        {% for day in gantt.day_headers %}
+                            <div class="gantt-day-cell{% if day.is_today %} is-today{% endif %}{% if day.is_weekend %} is-weekend{% endif %}">
+                                {% if day.is_today %}
+                                    <span class="gantt-today-pill">Today</span>
+                                {% endif %}
+                                <span class="gantt-day-num">{{ day.day_num }}</span>
+                                <span class="gantt-day-wd">{{ day.weekday|slice:":1" }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="gantt-body">
+                    {% if gantt.today_left_pct != None %}
+                        <div class="gantt-today-rail" aria-hidden="true">
+                            <div class="gantt-today-line" style="left: {{ gantt.today_left_pct }}%;"></div>
+                        </div>
+                    {% endif %}
+
+                    <div class="gantt-lane gantt-lane-gaps gantt-lane-status">
+                        <div class="gantt-sticky-meta gantt-lane-label">
+                            <span class="text-muted">Status</span>
+                        </div>
+                        <div class="gantt-row-track gantt-gap-track">
+                            {% for segment in gantt.status_segments %}
+                                <div class="gantt-status-seg gantt-status-{{ segment.kind }}"
+                                     style="left: {{ segment.left_pct }}%; width: {{ segment.width_pct }}%;"
+                                     title="{{ segment.tooltip }}">
+                                    <span class="gantt-gap-label">{{ segment.label }}</span>
+                                </div>
+                            {% endfor %}
+                            {% for handoff in gantt.handoffs %}
+                                <div class="gantt-handoff"
+                                     style="left: {{ handoff.left_pct }}%;"
+                                     title="{{ handoff.label }}"></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    {% for bar in gantt.bars %}
+                        {% include "relay/components/_driver_assignment_bar.html" with bar=bar %}
+                    {% empty %}
+                        <div class="gantt-row gantt-row-empty">
+                            <div class="gantt-row-meta">
+                                <p class="gantt-meta-dates text-muted">No truck assignments in range</p>
+                            </div>
+                            <div class="gantt-row-track"></div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="gantt-legend">
+            <span><i class="gantt-swatch gantt-bar-active"></i> Active</span>
+            <span><i class="gantt-swatch gantt-bar-planned"></i> Planned</span>
+            <span><i class="gantt-swatch gantt-bar-completed"></i> Completed</span>
+            <span><i class="gantt-swatch gantt-status-otr"></i> OTR</span>
+            <span><i class="gantt-swatch gantt-status-home"></i> Home</span>
+            <span><i class="gantt-swatch gantt-status-available"></i> Available</span>
+            <span><i class="gantt-swatch gantt-status-vacation"></i> Vacation</span>
+            <span><i class="gantt-swatch gantt-status-inactive"></i> Unavailable</span>
+        </div>
+    {% endif %}
+</article>

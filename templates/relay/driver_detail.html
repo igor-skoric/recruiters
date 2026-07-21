@@ -9,99 +9,205 @@
         <div>
             <a href="{% url 'relay:drivers' %}" class="back-link">← Drivers</a>
             <h1>{{ driver.full_name }}</h1>
-            <p class="text-muted">{{ driver.get_status_display }} · {{ driver.get_driver_type_display }}</p>
+            <p class="text-muted">
+                {{ driver.get_status_display }} · {{ driver.get_driver_type_display }}
+                {% if driver.driver_id %} · ID {{ driver.driver_id }}{% endif %}
+            </p>
         </div>
     </header>
 
-    <section class="detail-grid">
-        <article class="card detail-card">
-            <h2>Driver info</h2>
-            <dl class="info-list info-list-compact">
-                <div><dt>Phone</dt><dd>{% if driver.phone %}{{ driver.phone }}{% else %}—{% endif %}</dd></div>
-                <div><dt>Email</dt><dd>{% if driver.email %}{{ driver.email }}{% else %}—{% endif %}</dd></div>
-                <div><dt>Hire date</dt><dd>{% if driver.hire_date %}{{ driver.hire_date|date:"M j, Y" }}{% else %}—{% endif %}</dd></div>
-                <div><dt>Status</dt><dd>{{ driver.get_status_display }}</dd></div>
-                <div><dt>Type</dt><dd>{{ driver.get_driver_type_display }}</dd></div>
-            </dl>
-        </article>
+    <section class="detail-stack">
+        {% include "relay/components/_driver_timeline.html" %}
 
-        <article class="card detail-card">
-            <h2>Current truck</h2>
-            {% if current_assignment %}
-                <dl class="info-list info-list-compact">
-                    <div>
-                        <dt>Truck</dt>
-                        <dd>
-                            <a href="{% url 'relay:truck_detail' current_assignment.truck.pk %}">
-                                {{ current_assignment.truck.unit_number }}
-                            </a>
-                        </dd>
-                    </div>
-                    <div><dt>Start</dt><dd>{{ current_assignment.start_date|date:"M j, Y" }}</dd></div>
-                    <div><dt>Expected end</dt><dd>{{ current_assignment.expected_end_date|date:"M j, Y" }}</dd></div>
-                    <div>
-                        <dt>Status</dt>
-                        <dd><span class="badge {{ current_assignment.status|assignment_badge_class }}">{{ current_assignment.get_status_display }}</span></dd>
-                    </div>
-                </dl>
-            {% else %}
-                <p class="card-empty">No active truck assignment.</p>
-            {% endif %}
-        </article>
-
-        <article class="card detail-card">
-            <h2>Next planned truck</h2>
-            {% if next_assignment %}
-                <dl class="info-list info-list-compact">
-                    <div>
-                        <dt>Truck</dt>
-                        <dd>
-                            <a href="{% url 'relay:truck_detail' next_assignment.truck.pk %}">
-                                {{ next_assignment.truck.unit_number }}
-                            </a>
-                        </dd>
-                    </div>
-                    <div><dt>Starts</dt><dd>{{ next_assignment.start_date|date:"M j, Y" }}</dd></div>
-                    <div><dt>Expected end</dt><dd>{{ next_assignment.expected_end_date|date:"M j, Y" }}</dd></div>
-                </dl>
-            {% else %}
-                <p class="card-empty">No planned assignment.</p>
-            {% endif %}
-        </article>
-
-        <article class="card detail-card detail-card-wide">
-            <h2>Status timeline</h2>
-            <div class="period-controls period-controls-inline">
-                <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.prev_start }}&weeks={{ week_count }}">← Prev</a>
-                <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.today_start }}&weeks={{ week_count }}">Today</a>
-                <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.next_start }}&weeks={{ week_count }}">Next →</a>
-            </div>
-            <div class="timeline-legend" style="padding:0 0 0.75rem;">
-                <span class="legend-item"><span class="week-dot dot-otr"></span> OTR</span>
-                <span class="legend-item"><span class="week-dot dot-home"></span> Home</span>
-                <span class="legend-item"><span class="week-dot dot-available"></span> Available</span>
-                <span class="legend-item"><span class="week-dot dot-vacation"></span> Vacation</span>
-                <span class="legend-item"><span class="week-dot dot-inactive"></span> Unavailable</span>
-                <span class="legend-item"><span class="week-dot dot-review"></span> Gap</span>
-            </div>
-            <div class="detail-timeline-scroll">
-                <div class="week-track week-track-detail" style="--week-count: {{ week_count }};">
-                    {% for col in week_columns %}
-                        <div class="week-column week-column-detail{% if col.header.is_current %} week-column-current{% endif %}">
-                            <span class="week-header-cell">{{ col.header.label }}</span>
-                            <span class="week-date-range">{{ col.header.week_start|date:"n/j" }}–{{ col.header.display_end|date:"n/j" }}</span>
-                            <span
-                                class="week-dot week-dot-detail week-cell-detail dot-{{ col.circle.status }}"
-                                title="{{ col.circle.tooltip }}"
-                                aria-label="{{ col.circle.tooltip }}"
-                            ></span>
-                        </div>
-                    {% endfor %}
+        <div class="detail-grid detail-grid-assignments">
+            <article class="card detail-card detail-card-dense" id="driver-info">
+                <div class="detail-card-head detail-card-head-tight">
+                    <h2>Driver info</h2>
+                    <span class="badge">{{ driver.get_status_display }}</span>
                 </div>
-            </div>
-        </article>
+                <dl class="info-grid">
+                    <div>
+                        <dt>Driver ID</dt>
+                        <dd>{% if driver.driver_id %}{{ driver.driver_id }}{% else %}<span class="text-muted">—</span>{% endif %}</dd>
+                    </div>
+                    <div>
+                        <dt>Type</dt>
+                        <dd>{{ driver.get_driver_type_display }}</dd>
+                    </div>
+                    <div>
+                        <dt>Phone</dt>
+                        <dd>{% if driver.phone %}{{ driver.phone }}{% else %}<span class="text-muted">—</span>{% endif %}</dd>
+                    </div>
+                    <div>
+                        <dt>Hire date</dt>
+                        <dd>{% if driver.hire_date %}{{ driver.hire_date|date:"M j, Y" }}{% else %}<span class="text-muted">—</span>{% endif %}</dd>
+                    </div>
+                    <div class="info-grid-span">
+                        <dt>Email</dt>
+                        <dd>{% if driver.email %}{{ driver.email }}{% else %}<span class="text-muted">—</span>{% endif %}</dd>
+                    </div>
+                </dl>
+            </article>
 
-        <article class="card detail-card detail-card-wide">
+            <article class="card assignment-panel assignment-panel-dense">
+                <div class="assignment-panel-top">
+                    <div>
+                        <p class="assignment-panel-label">Current truck</p>
+                        {% if current_assignment %}
+                            <h3 class="assignment-panel-driver">
+                                <a href="{% url 'relay:truck_detail' current_assignment.truck.pk %}">
+                                    {{ current_assignment.truck.unit_number }}
+                                </a>
+                            </h3>
+                        {% elif home_time_period %}
+                            <h3 class="assignment-panel-driver">On home time</h3>
+                        {% else %}
+                            <h3 class="assignment-panel-driver text-muted">No active assignment</h3>
+                        {% endif %}
+                    </div>
+                    {% if current_assignment %}
+                        <span class="badge {{ current_assignment.status|assignment_badge_class }}">{{ current_assignment.get_status_display }}</span>
+                    {% elif home_time_period %}
+                        <span class="badge badge-status-planned">Home Time</span>
+                    {% endif %}
+                </div>
+
+                {% if current_assignment %}
+                    <div class="assignment-range assignment-range-dense">
+                        <div class="assignment-range-point">
+                            <span class="assignment-range-icon assignment-range-icon-start" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 1.5"/></svg>
+                            </span>
+                            <div>
+                                <span class="assignment-range-caption">Start</span>
+                                <strong>{{ current_assignment.start_date|date:"M j, Y" }}</strong>
+                            </div>
+                        </div>
+                        <div class="assignment-range-line" aria-hidden="true">
+                            {% if current_cycle_duration %}<span>{{ current_cycle_duration }}</span>{% endif %}
+                        </div>
+                        <div class="assignment-range-point">
+                            <span class="assignment-range-icon assignment-range-icon-home" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+                            </span>
+                            <div>
+                                <span class="assignment-range-caption">Returns home</span>
+                                <strong>{{ current_assignment.expected_end_date|date:"M j, Y" }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="assignment-notes">
+                        Rest at home after return:
+                        <strong>{{ current_assignment.home_time_days }} day{{ current_assignment.home_time_days|pluralize }}</strong>
+                    </p>
+                    {% if can_edit and home_time_form %}
+                        <div class="assignment-panel-actions">
+                            <button type="button" class="btn btn-primary btn-sm" data-modal-open="edit-home-time">
+                                Edit dates
+                            </button>
+                        </div>
+                    {% endif %}
+                {% elif home_time_period %}
+                    <div class="assignment-range assignment-range-dense">
+                        <div class="assignment-range-point">
+                            <span class="assignment-range-icon assignment-range-icon-home" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+                            </span>
+                            <div>
+                                <span class="assignment-range-caption">Started</span>
+                                <strong>{{ home_time_period.start_date|date:"M j, Y" }}</strong>
+                            </div>
+                        </div>
+                        <div class="assignment-range-line" aria-hidden="true">
+                            {% if home_period_days %}
+                                <span>{{ home_period_days }}d</span>
+                            {% endif %}
+                        </div>
+                        <div class="assignment-range-point">
+                            <span class="assignment-range-icon assignment-range-icon-start" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 1.5"/></svg>
+                            </span>
+                            <div>
+                                <span class="assignment-range-caption">Available again</span>
+                                <strong>
+                                    {% if home_time_period.end_date %}
+                                        {{ home_time_period.end_date|date:"M j, Y" }}
+                                    {% else %}
+                                        Open
+                                    {% endif %}
+                                </strong>
+                            </div>
+                        </div>
+                    </div>
+                    {% if home_time_period.assignment %}
+                        <p class="assignment-notes">
+                            After truck
+                            <a href="{% url 'relay:truck_detail' home_time_period.assignment.truck.pk %}">
+                                {{ home_time_period.assignment.truck.unit_number }}
+                            </a>
+                            · {{ home_time_period.assignment.home_time_days }} day{{ home_time_period.assignment.home_time_days|pluralize }}
+                        </p>
+                    {% endif %}
+                    {% if can_edit and home_period_form %}
+                        <div class="assignment-panel-actions">
+                            <button type="button" class="btn btn-secondary-light btn-sm" data-modal-open="edit-home-period">
+                                Edit Home Time Duration
+                            </button>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <p class="card-empty">No active truck assignment.</p>
+                {% endif %}
+            </article>
+
+            <article class="card assignment-panel assignment-panel-dense">
+                <div class="assignment-panel-top">
+                    <div>
+                        <p class="assignment-panel-label">Next planned truck</p>
+                        {% if next_assignment %}
+                            <h3 class="assignment-panel-driver">
+                                <a href="{% url 'relay:truck_detail' next_assignment.truck.pk %}">
+                                    {{ next_assignment.truck.unit_number }}
+                                </a>
+                            </h3>
+                        {% else %}
+                            <h3 class="assignment-panel-driver text-muted">Open</h3>
+                        {% endif %}
+                    </div>
+                    {% if next_assignment %}
+                        <span class="badge {{ next_assignment.status|assignment_badge_class }}">{{ next_assignment.get_status_display }}</span>
+                    {% endif %}
+                </div>
+
+                {% if next_assignment %}
+                    <div class="assignment-range assignment-range-dense">
+                        <div class="assignment-range-point">
+                            <span class="assignment-range-icon assignment-range-icon-start" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 1.5"/></svg>
+                            </span>
+                            <div>
+                                <span class="assignment-range-caption">Starts</span>
+                                <strong>{{ next_assignment.start_date|date:"M j, Y" }}</strong>
+                            </div>
+                        </div>
+                        <div class="assignment-range-line" aria-hidden="true"></div>
+                        <div class="assignment-range-point">
+                            <span class="assignment-range-icon assignment-range-icon-home" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+                            </span>
+                            <div>
+                                <span class="assignment-range-caption">Expected end</span>
+                                <strong>{{ next_assignment.expected_end_date|date:"M j, Y" }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="card-empty">No planned assignment.</p>
+                {% endif %}
+            </article>
+        </div>
+
+        <article class="card detail-card detail-card-full detail-card-dense">
             <h2>Assignment history</h2>
             {% if assignment_history %}
                 <div class="table-wrap">
@@ -133,7 +239,7 @@
             {% endif %}
         </article>
 
-        <article class="card detail-card detail-card-wide">
+        <article class="card detail-card detail-card-full detail-card-dense">
             <h2>Home time / status history</h2>
             {% if status_periods %}
                 <div class="table-wrap">
@@ -164,4 +270,83 @@
         </article>
     </section>
 </section>
+
+{% if can_edit and home_time_form and current_assignment %}
+<dialog class="app-modal" id="modal-edit-home-time">
+    <form method="post" action="{% url 'relay:driver_assignment_update_home_time' driver.pk %}" class="modal-panel" data-cycle-form>
+        {% csrf_token %}
+        <header class="modal-header">
+            <div class="modal-header-main">
+                <span class="modal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+                </span>
+                <div>
+                    <h2>Edit assignment dates</h2>
+                    <p class="help-text">
+                        Truck {{ current_assignment.truck.unit_number }}. Adjust start, return home, and back to work.
+                    </p>
+                </div>
+            </div>
+            <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
+        </header>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="{{ home_time_form.start_date.id_for_label }}">Start date</label>
+                {{ home_time_form.start_date }}
+            </div>
+            <div class="form-group">
+                <label for="{{ home_time_form.home_time_date.id_for_label }}">Return home / truck free date</label>
+                {{ home_time_form.home_time_date }}
+                <p class="help-text cycle-duration" data-cycle-duration>Cycle length: {{ current_cycle_duration }}</p>
+            </div>
+            <div class="form-group">
+                <label for="{{ home_time_form.back_to_work_date.id_for_label }}">Back to work date</label>
+                {{ home_time_form.back_to_work_date }}
+                <p class="help-text">Days at home are calculated from return home date to back to work date.</p>
+            </div>
+        </div>
+        <footer class="modal-footer">
+            <button type="button" class="btn btn-secondary-light" data-modal-close>Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </footer>
+    </form>
+</dialog>
+{% endif %}
+
+{% if can_edit and home_period_form and home_time_period %}
+<dialog class="app-modal" id="modal-edit-home-period">
+    <form method="post" action="{% url 'relay:driver_home_time_period_update' driver.pk %}" class="modal-panel">
+        {% csrf_token %}
+        <header class="modal-header">
+            <div class="modal-header-main">
+                <span class="modal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+                </span>
+                <div>
+                    <h2>Edit Home Time Duration</h2>
+                    <p class="help-text">
+                        Home time started {{ home_time_period.start_date|date:"M j, Y" }}.
+                        Set the date this driver becomes available again (3, 5, 15 days, etc.).
+                    </p>
+                </div>
+            </div>
+            <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
+        </header>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="{{ home_period_form.end_date.id_for_label }}">Available again on</label>
+                {{ home_period_form.end_date }}
+                <p class="help-text">
+                    {% if home_period_days %}Current duration: {{ home_period_days }} day{{ home_period_days|pluralize }}.{% endif %}
+                    Allowed range: 1–60 days from start.
+                </p>
+            </div>
+        </div>
+        <footer class="modal-footer">
+            <button type="button" class="btn btn-secondary-light" data-modal-close>Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </footer>
+    </form>
+</dialog>
+{% endif %}
 {% endblock %}

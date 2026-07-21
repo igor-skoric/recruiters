@@ -1,0 +1,72 @@
+<dialog class="app-modal" id="modal-import-{{ import_kind }}" data-open-on-load="{% if open_modal == 'import-'|add:import_kind %}1{% endif %}">
+    <form
+        method="post"
+        action="{% if import_kind == 'drivers' %}{% url 'relay:drivers_import' %}{% else %}{% url 'relay:trucks_import' %}{% endif %}"
+        enctype="multipart/form-data"
+        class="modal-panel"
+    >
+        {% csrf_token %}
+        <header class="modal-header">
+            <div class="modal-header-main">
+                <span class="modal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+                </span>
+                <div>
+                    <h2>Import {{ import_kind }}</h2>
+                    <p class="help-text">Upload a CSV or Excel (.xlsx) spreadsheet.</p>
+                </div>
+            </div>
+            <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
+        </header>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="{{ import_form.file.id_for_label }}">File</label>
+                {{ import_form.file }}
+                {% if import_form.file.errors %}
+                    {{ import_form.file.errors }}
+                {% else %}
+                    <p class="help-text">{{ import_form.file.help_text }}</p>
+                {% endif %}
+            </div>
+            <div class="import-hint">
+                {% if import_kind == 'drivers' %}
+                    <p class="help-text">
+                        Required columns: <code>first_name</code>, <code>last_name</code>
+                        (or <code>full_name</code>). Optional:
+                        <code>driver_id</code>,
+                        <code>phone</code>, <code>email</code>, <code>status</code>,
+                        <code>driver_type</code>, <code>hire_date</code>, <code>notes</code>.
+                    </p>
+                    <p class="help-text">
+                        Rows with Driver ID update that driver. Without ID, matching falls back to first + last name (and can attach the Driver ID as the initial link).
+                    </p>
+                {% else %}
+                    <p class="help-text">
+                        Required column: <code>unit_number</code>. Optional:
+                        <code>driver_id</code> (same Driver ID as on the driver → current driver),
+                        <code>vin</code>, <code>make</code>, <code>model</code>,
+                        <code>year</code>, <code>status</code>, <code>notes</code>.
+                    </p>
+                    <p class="help-text">
+                        Import drivers first, then trucks. Matching rows update by unit number.
+                    </p>
+                    <label class="import-option">
+                        <input type="checkbox" name="create_assignments" value="1" checked>
+                        <span>
+                            Create Start Assignment when Driver ID is linked
+                            (start = 2 weeks before today, default 4-week cycle).
+                            Skips trucks that already have an open assignment.
+                        </span>
+                    </label>
+                {% endif %}
+                <a class="btn btn-secondary-light btn-sm" href="{% url 'relay:import_template' import_kind %}">
+                    Download template CSV
+                </a>
+            </div>
+        </div>
+        <footer class="modal-footer">
+            <button type="button" class="btn btn-secondary-light" data-modal-close>Cancel</button>
+            <button type="submit" class="btn btn-primary">Import</button>
+        </footer>
+    </form>
+</dialog>

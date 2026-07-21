@@ -8,6 +8,7 @@ class DriverAdmin(admin.ModelAdmin):
     list_display = (
         "first_name",
         "last_name",
+        "driver_id",
         "status",
         "driver_type",
         "phone",
@@ -15,4 +16,4 @@ class DriverAdmin(admin.ModelAdmin):
         "hire_date",
     )
     list_filter = ("status", "driver_type")
-    search_fields = ("first_name", "last_name", "phone", "email")
+    search_fields = ("first_name", "last_name", "driver_id", "phone", "email")

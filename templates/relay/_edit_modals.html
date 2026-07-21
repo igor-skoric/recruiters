@@ -1,0 +1,125 @@
+<dialog class="app-modal" id="modal-driver-edit" data-open-on-load="{% if open_modal == 'driver-edit' %}1{% endif %}">
+    <form method="post" action="{% if edit_driver_action %}{{ edit_driver_action }}{% else %}#{% endif %}" class="modal-panel" data-edit-form="driver">
+        {% csrf_token %}
+        <header class="modal-header">
+            <div class="modal-header-main">
+                <span class="modal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </span>
+                <div>
+                    <h2>Edit driver</h2>
+                    <p class="help-text">Update driver details.</p>
+                </div>
+            </div>
+            <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
+        </header>
+        <div class="modal-body">
+            <div class="modal-form-grid">
+                <div class="form-group">
+                    <label for="{{ edit_driver_form.driver_id.id_for_label }}">Driver ID</label>
+                    {{ edit_driver_form.driver_id }}
+                    {{ edit_driver_form.driver_id.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_driver_form.status.id_for_label }}">Status</label>
+                    {{ edit_driver_form.status }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_driver_form.first_name.id_for_label }}">First name</label>
+                    {{ edit_driver_form.first_name }}
+                    {{ edit_driver_form.first_name.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_driver_form.last_name.id_for_label }}">Last name</label>
+                    {{ edit_driver_form.last_name }}
+                    {{ edit_driver_form.last_name.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_driver_form.phone.id_for_label }}">Phone</label>
+                    {{ edit_driver_form.phone }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_driver_form.email.id_for_label }}">Email</label>
+                    {{ edit_driver_form.email }}
+                    {{ edit_driver_form.email.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_driver_form.driver_type.id_for_label }}">Type</label>
+                    {{ edit_driver_form.driver_type }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_driver_form.hire_date.id_for_label }}">Hire date</label>
+                    {{ edit_driver_form.hire_date }}
+                </div>
+                <div class="form-group form-group-full">
+                    <label for="{{ edit_driver_form.notes.id_for_label }}">Notes</label>
+                    {{ edit_driver_form.notes }}
+                </div>
+            </div>
+        </div>
+        <footer class="modal-footer">
+            <button type="button" class="btn btn-secondary-light" data-modal-close>Cancel</button>
+            <button type="submit" class="btn btn-primary">Save changes</button>
+        </footer>
+    </form>
+</dialog>
+
+<dialog class="app-modal" id="modal-truck-edit" data-open-on-load="{% if open_modal == 'truck-edit' %}1{% endif %}">
+    <form method="post" action="{% if edit_truck_action %}{{ edit_truck_action }}{% else %}#{% endif %}" class="modal-panel" data-edit-form="truck">
+        {% csrf_token %}
+        <header class="modal-header">
+            <div class="modal-header-main">
+                <span class="modal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </span>
+                <div>
+                    <h2>Edit truck</h2>
+                    <p class="help-text">Update truck details and optional Driver ID link.</p>
+                </div>
+            </div>
+            <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
+        </header>
+        <div class="modal-body">
+            <div class="modal-form-grid">
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.unit_number.id_for_label }}">Unit number</label>
+                    {{ edit_truck_form.unit_number }}
+                    {{ edit_truck_form.unit_number.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.driver_id.id_for_label }}">Driver ID</label>
+                    {{ edit_truck_form.driver_id }}
+                    {{ edit_truck_form.driver_id.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.status.id_for_label }}">Status</label>
+                    {{ edit_truck_form.status }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.make.id_for_label }}">Make</label>
+                    {{ edit_truck_form.make }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.model.id_for_label }}">Model</label>
+                    {{ edit_truck_form.model }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.year.id_for_label }}">Year</label>
+                    {{ edit_truck_form.year }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ edit_truck_form.vin.id_for_label }}">VIN</label>
+                    {{ edit_truck_form.vin }}
+                </div>
+                <div class="form-group form-group-full">
+                    <label for="{{ edit_truck_form.notes.id_for_label }}">Notes</label>
+                    {{ edit_truck_form.notes }}
+                </div>
+            </div>
+        </div>
+        <footer class="modal-footer">
+            <button type="button" class="btn btn-secondary-light" data-modal-close>Cancel</button>
+            <button type="submit" class="btn btn-primary">Save changes</button>
+        </footer>
+    </form>
+</dialog>

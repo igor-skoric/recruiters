@@ -4,131 +4,108 @@
 {% block title %}Fleet Planner | Recruiters{% endblock %}
 
 {% block content %}
-{% kpi_drivers_home_time as home_time_count %}
-{% kpi_cycles_ending_soon fleet_items as ending_soon_count %}
-
 <section class="fleet-page">
     <div class="fleet-sticky-header">
         <div class="fleet-toolbar">
             <div class="fleet-toolbar-top">
                 <div class="fleet-toolbar-title">
                     <h1>Fleet Planner</h1>
-                    <p class="fleet-toolbar-meta">{{ fleet_summary.total }} trucks · {{ week_count }} weeks · from {{ board_start|date:"M j, Y" }}</p>
+                    <p class="fleet-toolbar-meta">
+                        <span data-fleet-visible-count>{{ fleet_items|length }}</span>/<span data-fleet-total-count>{{ fleet_total_count }}</span> trucks
+                        · {{ week_count }} weeks · from {{ board_start|date:"M j, Y" }}
+                        {% if filter_day %}
+                            · on {{ filter_day|date:"M j, Y" }}{% if filter_status_label %} · {{ filter_status_label }}{% endif %}
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="fleet-board-search">
+                    <label class="sr-only" for="fleet-search">Search fleet</label>
+                    <input
+                        id="fleet-search"
+                        class="form-control form-control-sm"
+                        type="search"
+                        placeholder="Search truck, current or next driver…"
+                        autocomplete="off"
+                        data-fleet-search
+                    >
+                </div>
+                <div class="period-controls">
+                    <div class="period-nav">
+                        <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.prev_start }}&weeks={{ week_count }}{% if period_nav.day %}&day={{ period_nav.day }}{% endif %}{% if period_nav.status %}&status={{ period_nav.status }}{% endif %}">← Prev</a>
+                        <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.today_start }}&weeks={{ week_count }}{% if period_nav.day %}&day={{ period_nav.day }}{% endif %}{% if period_nav.status %}&status={{ period_nav.status }}{% endif %}">Today</a>
+                        <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.next_start }}&weeks={{ week_count }}{% if period_nav.day %}&day={{ period_nav.day }}{% endif %}{% if period_nav.status %}&status={{ period_nav.status }}{% endif %}">Next →</a>
+                    </div>
+                    <div class="period-weeks">
+                        {% for option in period_nav.week_options %}
+                            <a class="btn btn-sm {% if option == week_count %}btn-primary{% else %}btn-secondary-light{% endif %}"
+                               href="?start={{ period_nav.start }}&weeks={{ option }}{% if period_nav.day %}&day={{ period_nav.day }}{% endif %}{% if period_nav.status %}&status={{ period_nav.status }}{% endif %}">{{ option }}w</a>
+                        {% endfor %}
+                    </div>
+                    <form class="period-year" method="get">
+                        <input type="hidden" name="weeks" value="{{ week_count }}">
+                        {% if period_nav.day %}<input type="hidden" name="day" value="{{ period_nav.day }}">{% endif %}
+                        {% if period_nav.status %}<input type="hidden" name="status" value="{{ period_nav.status }}">{% endif %}
+                        <label for="board-year">Year</label>
+                        <input id="board-year" class="form-control form-control-sm" type="number" name="year" value="{{ period_nav.year }}" min="2000" max="2100">
+                        <button type="submit" class="btn btn-secondary-light btn-sm">Go</button>
+                    </form>
                 </div>
             </div>
-
-            <div class="period-controls">
-                <div class="period-nav">
-                    <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.prev_start }}&weeks={{ week_count }}">← Prev</a>
-                    <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.today_start }}&weeks={{ week_count }}">Today</a>
-                    <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.next_start }}&weeks={{ week_count }}">Next →</a>
-                </div>
-                <div class="period-weeks">
-                    {% for option in period_nav.week_options %}
-                        <a class="btn btn-sm {% if option == week_count %}btn-primary{% else %}btn-secondary-light{% endif %}"
-                           href="?start={{ period_nav.start }}&weeks={{ option }}">{{ option }}w</a>
-                    {% endfor %}
-                </div>
-                <form class="period-year" method="get">
-                    <input type="hidden" name="weeks" value="{{ week_count }}">
-                    <label for="board-year">Year</label>
-                    <input id="board-year" class="form-control form-control-sm" type="number" name="year" value="{{ period_nav.year }}" min="2000" max="2100">
-                    <button type="submit" class="btn btn-secondary-light btn-sm">Go</button>
-                </form>
+            <form class="fleet-day-filters" method="get">
+                <input type="hidden" name="start" value="{{ period_nav.start }}">
+                <input type="hidden" name="weeks" value="{{ week_count }}">
+                <label class="fleet-filter-field">
+                    <span>Day</span>
+                    <input
+                        class="form-control form-control-sm"
+                        type="date"
+                        name="day"
+                        value="{% if filter_day %}{{ filter_day|date:'Y-m-d' }}{% endif %}"
+                    >
+                </label>
+                <label class="fleet-filter-field">
+                    <span>Status</span>
+                    <select class="form-control form-control-sm" name="status">
+                        {% for value, label in day_status_options %}
+                            <option value="{{ value }}" {% if filter_status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                {% if filter_day or filter_status %}
+                    <a class="btn btn-secondary-light btn-sm" href="?start={{ period_nav.start }}&weeks={{ week_count }}">Clear</a>
+                {% endif %}
+            </form>
+            <div class="timeline-legend timeline-legend-fleet">
+                <span class="legend-item"><span class="week-dot dot-otr"></span> Occupied</span>
+                <span class="legend-item"><span class="week-dot dot-home"></span> Available</span>
+                <span class="legend-item"><span class="week-dot dot-review"></span> Needs planning</span>
+                <span class="legend-item"><span class="week-dot dot-inactive"></span> Unavailable</span>
+                <span class="legend-item"><span class="week-column-current-sample"></span> This week</span>
             </div>
-        </div>
-
-        <div class="kpi-grid">
-            <article class="kpi-card">
-                <div class="kpi-card-head">
-                    <span class="kpi-label">Total Trucks</span>
-                    <span class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17h4V5H2v12h3"/><path d="M14 17h5l3-5v-2h-8v7z"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
-                </div>
-                <div class="kpi-value">{{ fleet_summary.total }}</div>
-                <div class="kpi-desc">Active fleet units</div>
-            </article>
-            <article class="kpi-card">
-                <div class="kpi-card-head">
-                    <span class="kpi-label">Occupied</span>
-                    <span class="kpi-icon kpi-icon-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-                </div>
-                <div class="kpi-value">{{ fleet_summary.otr }}</div>
-                <div class="kpi-desc">Currently on the road</div>
-            </article>
-            <article class="kpi-card">
-                <div class="kpi-card-head">
-                    <span class="kpi-label">Available</span>
-                    <span class="kpi-icon kpi-icon-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span>
-                </div>
-                <div class="kpi-value">{{ fleet_summary.available }}</div>
-                <div class="kpi-desc">Ready for assignment</div>
-            </article>
-            <article class="kpi-card">
-                <div class="kpi-card-head">
-                    <span class="kpi-label">Needs Planning</span>
-                    <span class="kpi-icon kpi-icon-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="m10.3 3.9-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.1l-8-14a2 2 0 0 0-3.4 0z"/></svg></span>
-                </div>
-                <div class="kpi-value">{{ fleet_summary.needs_review }}</div>
-                <div class="kpi-desc">Missing next driver plan</div>
-            </article>
-            <article class="kpi-card">
-                <div class="kpi-card-head">
-                    <span class="kpi-label">Maintenance</span>
-                    <span class="kpi-icon kpi-icon-muted"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 1 0 5.7l-7.7 7.7-4-4 7.7-7.7a4 4 0 0 1 5.7 0z"/><path d="m5 19 2 2"/></svg></span>
-                </div>
-                <div class="kpi-value">{{ fleet_summary.maintenance }}</div>
-                <div class="kpi-desc">Unavailable units</div>
-            </article>
-            <article class="kpi-card">
-                <div class="kpi-card-head">
-                    <span class="kpi-label">Drivers on Home Time</span>
-                    <span class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg></span>
-                </div>
-                <div class="kpi-value">{{ home_time_count }}</div>
-                <div class="kpi-desc">Drivers resting at home</div>
-            </article>
-            <article class="kpi-card">
-                <div class="kpi-card-head">
-                    <span class="kpi-label">Cycles Ending Soon</span>
-                    <span class="kpi-icon kpi-icon-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-                </div>
-                <div class="kpi-value">{{ ending_soon_count }}</div>
-                <div class="kpi-desc">Within the next 7 days</div>
-            </article>
-        </div>
-
-        <div class="timeline-legend">
-            <span class="legend-item"><span class="week-dot dot-otr"></span> Occupied</span>
-            <span class="legend-item"><span class="week-dot dot-home"></span> Available</span>
-            <span class="legend-item"><span class="week-dot dot-review"></span> Needs planning</span>
-            <span class="legend-item"><span class="week-dot dot-inactive"></span> Unavailable</span>
-            <span class="legend-item"><span class="week-column-current-sample"></span> This week</span>
         </div>
     </div>
 
-    {% if needs_review_count %}
-        <div class="message message-error message-compact">
-            {{ needs_review_count }} truck{{ needs_review_count|pluralize }} need review.
-        </div>
-    {% endif %}
-
-    <section class="card fleet-board">
+    <section class="card fleet-board{% if week_count <= 8 %} fleet-board--fill{% endif %}{% if filter_day %} fleet-board--day-filter{% endif %}" style="--week-count: {{ week_count }};">
         {% if fleet_items %}
             <div class="fleet-scroll">
                 <div class="fleet-week-header">
                     <div class="fleet-cell fleet-sticky-col fleet-col-truck"><span class="fleet-head-label">Truck</span></div>
                     <div class="fleet-cell fleet-sticky-col fleet-col-driver"><span class="fleet-head-label">Current Driver</span></div>
-                    <div class="fleet-cell"><span class="fleet-head-label">Current Cycle</span></div>
-                    <div class="fleet-cell"><span class="fleet-head-label">Expected End</span></div>
+                    <div class="fleet-cell"><span class="fleet-head-label">Current Assignment</span></div>
+                    <div class="fleet-cell"><span class="fleet-head-label">Home Time</span></div>
                     <div class="fleet-cell"><span class="fleet-head-label">Days Left</span></div>
                     <div class="fleet-cell"><span class="fleet-head-label">Next Driver</span></div>
                     <div class="fleet-cell"><span class="fleet-head-label">Planning</span></div>
+                    {% if filter_day %}
+                        <div class="fleet-cell"><span class="fleet-head-label">On {{ filter_day|date:"M j" }}</span></div>
+                    {% endif %}
                     <div class="fleet-cell fleet-col-timeline">
                         <div class="week-track week-track-header">
                             {% for col in week_columns_header %}
-                                <div class="week-column week-column-header{% if col.header.is_current %} week-column-current{% endif %}">
+                                <div class="week-column week-column-header{% if col.header.is_current %} week-column-current{% endif %}{% if filter_day and col.header.week_start <= filter_day and filter_day < col.header.week_end %} week-column-filter-day{% endif %}">
                                     <span class="week-header-cell">{{ col.header.label }}</span>
-                                    <span class="week-date-range">{{ col.header.week_start|date:"n/j" }}–{{ col.header.display_end|date:"n/j" }}</span>
+                                    <span class="week-date-range">{{ col.header.week_start|date:"M j" }}–{{ col.header.display_end|date:"M j" }}</span>
                                 </div>
                             {% endfor %}
                         </div>
@@ -138,7 +115,11 @@
 
                 {% for item in fleet_items %}
                     {% with row=item.row %}
-                    <div class="fleet-row {% if row.needs_review %}fleet-row-review{% endif %}">
+                    <div
+                        class="fleet-row {% if row.needs_review %}fleet-row-review{% endif %}"
+                        data-fleet-row
+                        data-fleet-search-text="{{ row.truck.unit_number }}{% if row.current_driver %} {{ row.current_driver.full_name }}{% if row.current_driver.driver_id %} {{ row.current_driver.driver_id }}{% endif %}{% endif %}{% if row.next_driver %} {{ row.next_driver.full_name }}{% if row.next_driver.driver_id %} {{ row.next_driver.driver_id }}{% endif %}{% endif %}"
+                    >
                         <div class="fleet-cell fleet-sticky-col fleet-col-truck">
                             <a class="fleet-truck-number" href="{% url 'relay:truck_detail' row.truck.pk %}">{{ row.truck.unit_number }}</a>
                         </div>
@@ -149,8 +130,12 @@
                                 <span class="text-muted">—</span>
                             {% endif %}
                         </div>
-                        <div class="fleet-cell fleet-cell-muted">
-                            {% if row.cycle_start_date %}{{ row.cycle_start_date|date:"M j, Y" }}{% else %}—{% endif %}
+                        <div class="fleet-cell">
+                            {% if row.current_cycle_duration %}
+                                <span class="fleet-cycle-duration">{{ row.current_cycle_duration }}</span>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
                         </div>
                         <div class="fleet-cell fleet-cell-muted">
                             {% if row.expected_home_date %}{{ row.expected_home_date|date:"M j, Y" }}{% else %}—{% endif %}
@@ -168,15 +153,35 @@
                         <div class="fleet-cell">
                             {% planning_badge row %}
                         </div>
+                        {% if filter_day and item.day_status %}
+                            <div class="fleet-cell">
+                                <span class="fleet-day-badge fleet-day-badge-{{ item.day_status.status }}">
+                                    {{ item.day_status.status_label }}
+                                </span>
+                                {% if item.day_status.driver %}
+                                    <span class="fleet-cell-sub">{{ item.day_status.driver }}</span>
+                                {% endif %}
+                            </div>
+                        {% endif %}
                         <div class="fleet-cell fleet-col-timeline">
                             <div class="week-track fleet-week-track">
                                 {% for col in item.week_columns %}
-                                    <div class="week-column{% if col.header.is_current %} week-column-current{% endif %}">
-                                        <span
-                                            class="week-dot week-cell dot-{{ col.circle.status }}"
-                                            title="{{ col.circle.tooltip }}"
-                                            aria-label="{{ col.circle.tooltip }}"
-                                        ></span>
+                                    <div
+                                        class="week-column fleet-week-column-daily{% if col.header.is_current %} week-column-current{% endif %}{% if filter_day and col.header.week_start <= filter_day and filter_day < col.header.week_end %} week-column-filter-day{% endif %}"
+                                        data-week-preview
+                                        data-week-title="{{ col.header.label }}"
+                                        data-days="{{ col.circle.days_json }}"
+                                        title="{{ col.circle.tooltip }}"
+                                        aria-label="{{ col.circle.tooltip }}"
+                                    >
+                                        <div class="week-day-stack" aria-hidden="true">
+                                            {% for day in col.circle.days %}
+                                                <span
+                                                    class="week-day-mini dot-{{ day.status }}{% if filter_day and day.iso == filter_day|date:'Y-m-d' %} is-filter-day{% endif %}"
+                                                    title="{{ day.label }} {{ day.date }}{% if day.driver %} — {{ day.driver }}{% endif %}"
+                                                ></span>
+                                            {% endfor %}
+                                        </div>
                                     </div>
                                 {% endfor %}
                             </div>
@@ -188,8 +193,16 @@
                     {% endwith %}
                 {% endfor %}
             </div>
+            <p class="empty-state fleet-search-empty" data-fleet-search-empty hidden>No trucks match your search.</p>
         {% else %}
-            <p class="empty-state">No trucks yet. Add a truck to start planning.</p>
+            <p class="empty-state">
+                {% if filter_day or filter_status %}
+                    No trucks match this day/status filter.
+                    <a href="?start={{ period_nav.start }}&weeks={{ week_count }}">Clear filters</a>
+                {% else %}
+                    No trucks yet. Add a truck to start planning.
+                {% endif %}
+            </p>
         {% endif %}
     </section>
 </section>

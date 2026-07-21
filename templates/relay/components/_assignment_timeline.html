@@ -1,0 +1,101 @@
+{% load fleet_ui %}
+<article class="card td-timeline-card">
+    <div class="td-timeline-head">
+        <div class="td-timeline-title">
+            <h2>Assignment Timeline</h2>
+            <p class="td-timeline-subtitle">
+                Exact driver assignments, relay handoffs and open periods for this truck.
+            </p>
+        </div>
+        <div class="td-period-controls" role="toolbar" aria-label="Timeline period">
+            <div class="td-period-group">
+                <a class="btn btn-secondary-light btn-sm"
+                   href="?start={{ period_nav.prev_start }}&weeks={{ week_count }}">Prev</a>
+                <a class="btn btn-secondary-light btn-sm"
+                   href="?start={{ period_nav.today_start }}&weeks={{ week_count }}">Today</a>
+                <a class="btn btn-secondary-light btn-sm"
+                   href="?start={{ period_nav.next_start }}&weeks={{ week_count }}">Next</a>
+            </div>
+            <span class="td-period-label">{{ gantt.period_label }}</span>
+            <label class="td-weeks-select">
+                <span class="visually-hidden">Weeks</span>
+                <select onchange="window.location.search='?start={{ period_nav.start }}&weeks='+this.value">
+                    {% for option in period_nav.week_options %}
+                        <option value="{{ option }}" {% if option == week_count %}selected{% endif %}>{{ option }}w</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+    </div>
+
+    {% if not gantt.has_assignments %}
+        {% include "relay/components/_empty_timeline.html" %}
+    {% else %}
+        <div class="gantt-scroll">
+            <div class="gantt-board{% if week_count <= 8 %} gantt-board--fill{% endif %}" style="--gantt-days: {{ gantt.total_days }};">
+                <div class="gantt-corner gantt-sticky-meta"></div>
+                <div class="gantt-headers">
+                    <div class="gantt-week-row">
+                        {% for band in gantt.week_bands %}
+                            <div class="gantt-week-band" style="left: {{ band.left_pct }}%; width: {{ band.width_pct }}%;">
+                                <span class="gantt-week-label">{{ band.label }}</span>
+                                <span class="gantt-week-range">{{ band.week_start|date:"M j" }}–{{ band.display_end|date:"M j" }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <div class="gantt-day-row">
+                        {% for day in gantt.day_headers %}
+                            <div class="gantt-day-cell{% if day.is_today %} is-today{% endif %}{% if day.is_weekend %} is-weekend{% endif %}">
+                                {% if day.is_today %}
+                                    <span class="gantt-today-pill">Today</span>
+                                {% endif %}
+                                <span class="gantt-day-num">{{ day.day_num }}</span>
+                                <span class="gantt-day-wd">{{ day.weekday|slice:":1" }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="gantt-body">
+                    {% if gantt.today_left_pct != None %}
+                        <div class="gantt-today-rail" aria-hidden="true">
+                            <div class="gantt-today-line" style="left: {{ gantt.today_left_pct }}%;"></div>
+                        </div>
+                    {% endif %}
+
+                    <div class="gantt-lane gantt-lane-gaps">
+                        <div class="gantt-sticky-meta gantt-lane-label">
+                            <span class="text-muted">Coverage</span>
+                        </div>
+                        <div class="gantt-row-track gantt-gap-track">
+                            {% for gap in gantt.gaps %}
+                                <div class="gantt-gap gantt-gap-{{ gap.kind }}"
+                                     style="left: {{ gap.left_pct }}%; width: {{ gap.width_pct }}%;"
+                                     title="{{ gap.label }}: {{ gap.start|date:'M j' }} → {{ gap.end|date:'M j' }}">
+                                    <span class="gantt-gap-label">{{ gap.label }}</span>
+                                </div>
+                            {% endfor %}
+                            {% for handoff in gantt.handoffs %}
+                                <div class="gantt-handoff"
+                                     style="left: {{ handoff.left_pct }}%;"
+                                     title="{{ handoff.label }}"></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    {% for bar in gantt.bars %}
+                        {% include "relay/components/_assignment_bar.html" with bar=bar %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="gantt-legend">
+            <span><i class="gantt-swatch gantt-bar-active"></i> Active</span>
+            <span><i class="gantt-swatch gantt-bar-planned"></i> Planned</span>
+            <span><i class="gantt-swatch gantt-bar-completed"></i> Completed</span>
+            <span><i class="gantt-swatch gantt-gap-available"></i> Available</span>
+            <span><i class="gantt-swatch gantt-gap-needs_planning"></i> Needs planning</span>
+            <span><i class="gantt-swatch gantt-handoff-sample"></i> Handoff</span>
+        </div>
+    {% endif %}
+</article>

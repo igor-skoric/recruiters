@@ -16,6 +16,15 @@
         <div class="modal-body">
             <div class="modal-form-grid">
                 <div class="form-group">
+                    <label for="{{ driver_form.driver_id.id_for_label }}">Driver ID</label>
+                    {{ driver_form.driver_id }}
+                    {{ driver_form.driver_id.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ driver_form.status.id_for_label }}">Status</label>
+                    {{ driver_form.status }}
+                </div>
+                <div class="form-group">
                     <label for="{{ driver_form.first_name.id_for_label }}">First name</label>
                     {{ driver_form.first_name }}
                     {{ driver_form.first_name.errors }}
@@ -33,10 +42,6 @@
                     <label for="{{ driver_form.email.id_for_label }}">Email</label>
                     {{ driver_form.email }}
                     {{ driver_form.email.errors }}
-                </div>
-                <div class="form-group">
-                    <label for="{{ driver_form.status.id_for_label }}">Status</label>
-                    {{ driver_form.status }}
                 </div>
                 <div class="form-group">
                     <label for="{{ driver_form.driver_type.id_for_label }}">Type</label>
@@ -69,7 +74,7 @@
                 </span>
                 <div>
                     <h2>Add truck</h2>
-                    <p class="help-text">Then use Start Assignment on the truck page.</p>
+                    <p class="help-text">Optionally link a current driver by Driver ID.</p>
                 </div>
             </div>
             <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
@@ -80,6 +85,11 @@
                     <label for="{{ truck_form.unit_number.id_for_label }}">Unit number</label>
                     {{ truck_form.unit_number }}
                     {{ truck_form.unit_number.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ truck_form.driver_id.id_for_label }}">Driver ID</label>
+                    {{ truck_form.driver_id }}
+                    {{ truck_form.driver_id.errors }}
                 </div>
                 <div class="form-group">
                     <label for="{{ truck_form.status.id_for_label }}">Status</label>

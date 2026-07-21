@@ -1,0 +1,33 @@
+{% load fleet_ui %}
+<div class="gantt-row">
+    <div class="gantt-row-meta">
+        <div class="gantt-driver-block">
+            <span class="gantt-avatar" aria-hidden="true">{{ bar.driver_name|slice:":1" }}</span>
+            <div class="gantt-driver-copy">
+                <a class="gantt-driver-name" href="{% url 'relay:driver_detail' bar.assignment.driver.pk %}">
+                    {{ bar.driver_name }}
+                </a>
+                <div class="gantt-meta-badges">
+                    {% include "relay/components/_status_badge.html" with status=bar.status label=bar.status_label %}
+                    {% if bar.ends_soon %}
+                        <span class="badge badge-ends-soon">Ends soon</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <p class="gantt-meta-dates">
+            {{ bar.start_date|date:"M j" }} → {{ bar.display_end|date:"M j, Y" }}
+        </p>
+        <p class="gantt-meta-duration">{{ bar.duration_label }}</p>
+    </div>
+    <div class="gantt-row-track">
+        <div
+            class="gantt-bar {{ bar.bar_class }}"
+            style="left: {{ bar.left_pct }}%; width: {{ bar.width_pct }}%;"
+            title="{% for line in bar.tooltip_lines %}{{ line }}{% if not forloop.last %}&#10;{% endif %}{% endfor %}"
+        >
+            <span class="gantt-bar-initial" aria-hidden="true">{{ bar.driver_name|slice:":1" }}</span>
+            <span class="gantt-bar-label">{{ bar.driver_name }}</span>
+        </div>
+    </div>
+</div>

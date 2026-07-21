@@ -30,6 +30,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"process_relay_state complete — activated={result.activated}, "
-                f"completed={result.completed}, yarded={result.yarded}"
+                f"completed={result.completed}, yarded={result.yarded}, "
+                f"demoted={result.demoted}, home_time_cleared={result.home_time_cleared}"
             )
         )

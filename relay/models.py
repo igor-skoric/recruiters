@@ -115,7 +115,7 @@ class RelayAssignment(models.Model):
         default=AssignmentStatus.PLANNED,
     )
     cycle_weeks = models.PositiveSmallIntegerField(default=4)
-    home_time_weeks = models.PositiveSmallIntegerField(default=1)
+    home_time_days = models.PositiveSmallIntegerField(default=7)
     previous_assignment = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,

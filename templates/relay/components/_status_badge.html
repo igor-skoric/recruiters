@@ -1,0 +1,4 @@
+{% load fleet_ui %}
+<span class="badge {{ status|assignment_badge_class }}{% if extra_class %} {{ extra_class }}{% endif %}">
+    {{ label }}
+</span>

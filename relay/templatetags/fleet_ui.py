@@ -52,3 +52,13 @@ def assignment_badge_class(status: str) -> str:
         "cancelled": "badge-status-cancelled",
     }
     return mapping.get(status, "badge-status-cancelled")
+
+
+@register.filter
+def cycle_duration(assignment) -> str:
+    """Display-only duration label from existing assignment dates."""
+    from relay.services.relay_service import format_cycle_duration
+
+    if not assignment or not assignment.start_date or not assignment.expected_end_date:
+        return "—"
+    return format_cycle_duration(assignment.start_date, assignment.expected_end_date)

@@ -24,15 +24,18 @@ from relay.services.timeline import (
     build_driver_week_circles,
     build_truck_week_circles,
     get_board_week_headers as build_week_headers,
+    resolve_truck_day_status,
+    DAY_STATUS_FILTERS,
+    TruckWeekStatus,
 )
 
 if TYPE_CHECKING:
     from accounts.models import User
 
 DEFAULT_CYCLE_WEEKS = 4
-DEFAULT_HOME_TIME_WEEKS = 1
-BOARD_WEEK_COUNT = 12
-ALLOWED_WEEK_COUNTS = {8, 12, 16, 52}
+DEFAULT_HOME_TIME_DAYS = 7
+BOARD_WEEK_COUNT = 8
+ALLOWED_WEEK_COUNTS = {5, 8, 12, 16}
 
 
 class WeekCircleStatus:
@@ -41,24 +44,6 @@ class WeekCircleStatus:
     REVIEW = "review"
     INACTIVE = "inactive"
     AVAILABLE = "available"
-
-
-class TimelineStatus:
-    OTR = "otr"
-    HOME_TIME = "home_time"
-    YARD = "yard"
-    OPEN = "open"
-
-
-@dataclass
-class WeekSegment:
-    week_start: date
-    week_end: date
-    status: str
-    label: str
-    assignment_id: int | None = None
-    driver_name: str | None = None
-    truck_unit: str | None = None
 
 
 @dataclass
@@ -83,6 +68,14 @@ class RelayBoardRow:
     planning_status: str = "ok"
     planning_status_label: str = "OK"
     assignments: list | None = None
+
+    @property
+    def current_cycle_duration(self) -> str | None:
+        if self.cycle_start_date and self.expected_home_date:
+            return format_cycle_duration_compact(
+                self.cycle_start_date, self.expected_home_date
+            )
+        return None
 
 
 def get_board_week_headers(
@@ -116,6 +109,26 @@ def get_truck_week_circles(
     return build_truck_week_circles(row.truck, truck_assignments, week_headers)
 
 
+def get_truck_day_status(
+    row: RelayBoardRow,
+    day: date,
+    *,
+    assignments: list[RelayAssignment] | None = None,
+) -> dict:
+    """Day occupancy status for fleet board date/status filters."""
+    truck_assignments = assignments
+    if truck_assignments is None:
+        truck_assignments = row.assignments
+    if truck_assignments is None:
+        truck_assignments = list(
+            RelayAssignment.objects.filter(truck=row.truck)
+            .exclude(status=AssignmentStatus.CANCELLED)
+            .select_related("driver")
+            .order_by("start_date")
+        )
+    return resolve_truck_day_status(row.truck, truck_assignments, day)
+
+
 def get_driver_week_circles(
     driver: Driver,
     week_headers: list[WeekHeader] | None = None,
@@ -135,12 +148,49 @@ def calculate_expected_end_date(start_date: date, cycle_weeks: int = DEFAULT_CYC
     return start_date + timedelta(weeks=cycle_weeks)
 
 
+def cycle_weeks_from_dates(start_date: date, home_time_date: date) -> int:
+    """Derive stored cycle_weeks from start → home-time (exclusive end) dates."""
+    days = (home_time_date - start_date).days
+    if days < 1:
+        raise ValidationError("Home time date must be after start date.")
+    return max(1, (days + 6) // 7)
+
+
+def format_cycle_duration(start_date: date, home_time_date: date) -> str:
+    """Human-readable cycle length, e.g. '4 weeks', '3 weeks 5 days'."""
+    days = (home_time_date - start_date).days
+    if days < 1:
+        return "—"
+    weeks, rem = divmod(days, 7)
+    parts: list[str] = []
+    if weeks:
+        parts.append(f"{weeks} week{'s' if weeks != 1 else ''}")
+    if rem:
+        parts.append(f"{rem} day{'s' if rem != 1 else ''}")
+    return " ".join(parts) if parts else "0 days"
+
+
+def format_cycle_duration_compact(start_date: date, home_time_date: date) -> str:
+    """Compact cycle length for dense tables, e.g. '4w', '3w 5d'."""
+    days = (home_time_date - start_date).days
+    if days < 1:
+        return "—"
+    weeks, rem = divmod(days, 7)
+    parts: list[str] = []
+    if weeks:
+        parts.append(f"{weeks}w")
+    if rem:
+        parts.append(f"{rem}d")
+    return " ".join(parts) if parts else "0d"
+
+
 def _week_monday(value: date) -> date:
     return value - timedelta(days=value.weekday())
 
 
-def _home_period_end(home_start: date, home_weeks: int = DEFAULT_HOME_TIME_WEEKS) -> date:
-    return home_start + timedelta(weeks=home_weeks) - timedelta(days=1)
+def _home_period_end(home_start: date, home_days: int = DEFAULT_HOME_TIME_DAYS) -> date:
+    """Inclusive last day of home time starting on home_start."""
+    return home_start + timedelta(days=home_days) - timedelta(days=1)
 
 
 def _default_next_driver_start(expected_home_date: date | None) -> date | None:
@@ -152,7 +202,7 @@ def _default_next_driver_start(expected_home_date: date | None) -> date | None:
 def _home_time_end(assignment: RelayAssignment) -> date:
     """Exclusive end of home-time period after assignment ends."""
     end = assignment.actual_end_date or assignment.expected_end_date
-    return end + timedelta(weeks=assignment.home_time_weeks)
+    return end + timedelta(days=assignment.home_time_days)
 
 
 def assignment_period_bounds(assignment: RelayAssignment) -> tuple[date, date]:
@@ -331,8 +381,27 @@ def _close_otr_status_period(assignment: RelayAssignment, actual_end_date: date)
         period.save(update_fields=["end_date", "updated_at"])
 
 
+def _clear_otr_status_period(assignment: RelayAssignment) -> None:
+    DriverStatusPeriod.objects.filter(
+        assignment=assignment,
+        status=DriverPeriodStatus.OTR,
+    ).delete()
+
+
+def _release_truck_from_assignment(assignment: RelayAssignment) -> None:
+    """Clear truck cache when this assignment is no longer current occupancy."""
+    truck = assignment.truck
+    if truck.current_driver_id != assignment.driver_id:
+        return
+    if get_current_assignment_for_truck(truck) is not None:
+        return
+    truck.current_driver = None
+    truck.status = TruckStatus.YARD
+    truck.save(update_fields=["current_driver", "status", "updated_at"])
+
+
 def _create_home_time_period(assignment: RelayAssignment, actual_end_date: date) -> DriverStatusPeriod:
-    home_end = actual_end_date + timedelta(weeks=assignment.home_time_weeks)
+    home_end = actual_end_date + timedelta(days=assignment.home_time_days)
     period = (
         DriverStatusPeriod.objects.filter(
             assignment=assignment,
@@ -353,6 +422,22 @@ def _create_home_time_period(assignment: RelayAssignment, actual_end_date: date)
         end_date=home_end,
         assignment=assignment,
     )
+
+
+def _sync_planned_home_time_period(assignment: RelayAssignment) -> DriverStatusPeriod | None:
+    """Write planned home time to history before the driver actually goes home."""
+    if assignment.status not in {AssignmentStatus.ACTIVE, AssignmentStatus.PLANNED}:
+        return None
+    if not assignment.expected_end_date:
+        return None
+    return _create_home_time_period(assignment, assignment.expected_end_date)
+
+
+def _clear_home_time_period_for_assignment(assignment: RelayAssignment) -> None:
+    DriverStatusPeriod.objects.filter(
+        assignment=assignment,
+        status=DriverPeriodStatus.HOME_TIME,
+    ).delete()
 
 
 def _assignments_for_truck(truck: Truck) -> list[RelayAssignment]:
@@ -410,22 +495,7 @@ def _sync_truck_and_driver_for_active(assignment: RelayAssignment) -> None:
     driver.save(update_fields=["status", "updated_at"])
 
     _ensure_otr_status_period(assignment)
-
-
-def _get_active_assignment(truck: Truck) -> RelayAssignment | None:
-    """Prefer true ACTIVE occupancy as of today; else keep legacy planned fallback."""
-    current = get_current_assignment_for_truck(truck)
-    if current:
-        return current
-    return (
-        RelayAssignment.objects.filter(
-            truck=truck,
-            status__in={AssignmentStatus.ACTIVE, AssignmentStatus.PLANNED},
-        )
-        .select_related("driver", "next_assignment__driver")
-        .order_by("-start_date")
-        .first()
-    )
+    _sync_planned_home_time_period(assignment)
 
 
 def _resolve_board_data(truck: Truck) -> dict:
@@ -711,102 +781,58 @@ def get_relay_board() -> list[RelayBoardRow]:
 
 
 @transaction.atomic
-def save_status_override(
-    truck: Truck,
-    updated_by: User | None = None,
-    *,
-    cycle_start_date: date | None = None,
-    expected_home_date: date | None = None,
-    next_driver: Driver | None = None,
-    next_driver_start_date: date | None = None,
-    notes: str = "",
-    status_override: str | None = None,
-    update_cycle_start: bool = False,
-    update_expected_home: bool = False,
-    update_next_driver: bool = False,
-    update_next_driver_start: bool = False,
-    update_notes: bool = False,
-    update_status: bool = False,
-) -> RelayStatusOverride:
-    """
-    Create or update fallback corrections for a truck.
-
-    Does not rewrite historical RelayAssignment rows. When assignments exist,
-    board resolution prefers them over these override fields.
-    """
-    override, _created = RelayStatusOverride.objects.get_or_create(
-        truck=truck,
-        defaults={"updated_by": updated_by},
-    )
-
-    if update_cycle_start:
-        override.cycle_start_date = cycle_start_date
-        if cycle_start_date and not update_expected_home:
-            override.expected_home_date = calculate_expected_end_date(cycle_start_date)
-
-    if update_expected_home:
-        override.expected_home_date = expected_home_date
-
-    if update_next_driver:
-        override.next_driver = next_driver
-        if not next_driver:
-            override.next_driver_start_date = None
-
-    if update_next_driver_start:
-        override.next_driver_start_date = next_driver_start_date
-        if (
-            override.next_driver_id
-            and not override.next_driver_start_date
-            and override.expected_home_date
-        ):
-            override.next_driver_start_date = _default_next_driver_start(
-                override.expected_home_date
-            )
-
-    if update_notes:
-        override.notes = notes
-
-    if update_status:
-        override.status_override = status_override or ""
-
-    override.updated_by = updated_by
-    override.save()
-    return override
-
-
-@transaction.atomic
 def plan_next_assignment(
     truck: Truck,
     driver: Driver,
     start_date: date,
     *,
     cycle_weeks: int = DEFAULT_CYCLE_WEEKS,
+    home_time_days: int = DEFAULT_HOME_TIME_DAYS,
+    expected_end_date: date | None = None,
     notes: str = "",
     created_by: User | None = None,
     existing: RelayAssignment | None = None,
 ) -> RelayAssignment:
     """Create or update a PLANNED assignment. Does not write RelayStatusOverride."""
-    expected_end = calculate_expected_end_date(start_date, cycle_weeks)
+    if expected_end_date is None:
+        expected_end = calculate_expected_end_date(start_date, cycle_weeks)
+        weeks = cycle_weeks
+    else:
+        if expected_end_date <= start_date:
+            raise ValidationError("Home time date must be after start date.")
+        expected_end = expected_end_date
+        weeks = cycle_weeks_from_dates(start_date, expected_end)
+
+    if home_time_days < 1 or home_time_days > 60:
+        raise ValidationError("Home time days must be between 1 and 60.")
+
     if existing is not None:
         if existing.status != AssignmentStatus.PLANNED:
             raise ValidationError("Only planned assignments can be edited here.")
         if existing.truck_id != truck.pk:
             raise ValidationError("Assignment does not belong to this truck.")
+        driver_changed = existing.driver_id != driver.pk
         existing.driver = driver
         existing.start_date = start_date
         existing.expected_end_date = expected_end
-        existing.cycle_weeks = cycle_weeks
+        existing.cycle_weeks = weeks
+        existing.home_time_days = home_time_days
         existing.notes = notes
         existing.actual_end_date = None
         validate_assignment_overlap(existing)
         existing.save()
+        if driver_changed:
+            # Old driver's planned home time no longer applies.
+            _clear_home_time_period_for_assignment(existing)
+        _sync_planned_home_time_period(existing)
         return existing
 
     return create_assignment(
         driver=driver,
         truck=truck,
         start_date=start_date,
-        cycle_weeks=cycle_weeks,
+        cycle_weeks=weeks,
+        home_time_days=home_time_days,
         expected_end_date=expected_end,
         status=AssignmentStatus.PLANNED,
         notes=notes,
@@ -815,49 +841,110 @@ def plan_next_assignment(
 
 
 @transaction.atomic
-def cancel_planned_assignment(assignment: RelayAssignment) -> RelayAssignment:
-    if assignment.status != AssignmentStatus.PLANNED:
-        raise ValidationError("Only planned assignments can be cancelled.")
-    assignment.status = AssignmentStatus.CANCELLED
+def update_assignment_home_time(
+    assignment: RelayAssignment,
+    home_time_date: date,
+    *,
+    start_date: date | None = None,
+) -> RelayAssignment:
+    """Update start and/or expected home/end date for an ACTIVE or PLANNED assignment.
+
+    Truck occupancy is [start, expected_end), so the linked truck is free from
+    home_time_date onward on the fleet timeline. When the new date is today or
+    earlier for an ACTIVE assignment, process_relay_state() completes it so the
+    truck is cleared operationally as well.
+
+    If start is moved into the future, the assignment is demoted to PLANNED so it
+    shows under Next (not as a phantom Active with empty Current).
+    """
+    if assignment.status not in {AssignmentStatus.ACTIVE, AssignmentStatus.PLANNED}:
+        raise ValidationError("Only active or planned assignments can change home time date.")
+
+    today = timezone.localdate()
+    new_start = start_date if start_date is not None else assignment.start_date
+    if home_time_date <= new_start:
+        raise ValidationError("Home time date must be after start date.")
+
+    assignment.start_date = new_start
+    assignment.expected_end_date = home_time_date
+    assignment.cycle_weeks = cycle_weeks_from_dates(new_start, home_time_date)
+
+    if new_start > today:
+        # Not yet started — schedule only.
+        demoted = assignment.status == AssignmentStatus.ACTIVE
+        assignment.status = AssignmentStatus.PLANNED
+        validate_assignment_overlap(assignment)
+        assignment.save()
+        _clear_otr_status_period(assignment)
+        _sync_planned_home_time_period(assignment)
+        if demoted:
+            _release_truck_from_assignment(assignment)
+        return assignment
+
+    # Starts today or earlier — treat as live occupancy.
+    validate_assignment_overlap(assignment)
     assignment.save()
+    if assignment.status == AssignmentStatus.PLANNED:
+        return activate_assignment(assignment)
+
+    _ensure_otr_status_period(assignment)
+    _sync_planned_home_time_period(assignment)
     return assignment
 
 
 @transaction.atomic
-def save_relay_plan(
-    truck: Truck,
-    updated_by: User | None = None,
-    *,
-    next_driver: Driver | None = None,
-    next_driver_start_date: date | None = None,
-    notes: str = "",
-    status_override: str | None = None,
-    cycle_start_date: date | None = None,
-    expected_home_date: date | None = None,
-) -> dict:
-    """
-    Legacy helper retained for tests/compatibility.
+def update_assignment_home_time_days(
+    assignment: RelayAssignment,
+    home_time_days: int,
+) -> RelayAssignment:
+    """Set how many days the driver stays home after this cycle ends."""
+    if assignment.status not in {
+        AssignmentStatus.ACTIVE,
+        AssignmentStatus.PLANNED,
+        AssignmentStatus.COMPLETED,
+    }:
+        raise ValidationError("Cannot change home time days for this assignment.")
+    if home_time_days < 1 or home_time_days > 60:
+        raise ValidationError("Home time days must be between 1 and 60.")
 
-    Manual UI no longer writes override for planning — prefer plan_next_assignment().
-    """
-    result: dict = {"assignment": None, "override": None}
+    assignment.home_time_days = home_time_days
+    assignment.save(update_fields=["home_time_days", "updated_at"])
 
-    if next_driver and next_driver_start_date:
-        existing = get_next_assignment_for_truck(truck)
-        result["assignment"] = plan_next_assignment(
-            truck,
-            next_driver,
-            next_driver_start_date,
-            notes=notes,
-            created_by=updated_by,
-            existing=existing,
+    if assignment.status == AssignmentStatus.COMPLETED and assignment.actual_end_date:
+        period = (
+            DriverStatusPeriod.objects.filter(
+                assignment=assignment,
+                status=DriverPeriodStatus.HOME_TIME,
+            )
+            .order_by("-id")
+            .first()
         )
-    elif next_driver and not next_driver_start_date:
-        raise ValidationError(
-            {"next_driver_start_date": "Start date is required when planning a next driver."}
-        )
+        if period:
+            new_end = period.start_date + timedelta(days=home_time_days)
+            update_driver_home_time_period(period, new_end)
+    elif assignment.status in {AssignmentStatus.ACTIVE, AssignmentStatus.PLANNED}:
+        _sync_planned_home_time_period(assignment)
 
-    return result
+    return assignment
+
+
+def apply_home_time_side_effects(assignment: RelayAssignment) -> None:
+    """Run after update_assignment_home_time when date may require completion."""
+    if (
+        assignment.status == AssignmentStatus.ACTIVE
+        and assignment.expected_end_date <= timezone.localdate()
+    ):
+        process_relay_state()
+
+
+@transaction.atomic
+def cancel_planned_assignment(assignment: RelayAssignment) -> RelayAssignment:
+    if assignment.status != AssignmentStatus.PLANNED:
+        raise ValidationError("Only planned assignments can be cancelled.")
+    _clear_home_time_period_for_assignment(assignment)
+    assignment.status = AssignmentStatus.CANCELLED
+    assignment.save()
+    return assignment
 
 
 @dataclass
@@ -865,6 +952,71 @@ class ProcessRelayResult:
     activated: int = 0
     completed: int = 0
     yarded: int = 0
+    home_time_cleared: int = 0
+    demoted: int = 0
+
+
+def _home_time_period_is_open(period: DriverStatusPeriod, as_of: date) -> bool:
+    """True when as_of is inside [start_date, end_date)."""
+    if period.start_date > as_of:
+        return False
+    end = period.end_date
+    return end is None or as_of < end
+
+
+def _driver_has_open_home_time(driver: Driver, as_of: date) -> bool:
+    periods = DriverStatusPeriod.objects.filter(
+        driver=driver,
+        status=DriverPeriodStatus.HOME_TIME,
+    )
+    return any(_home_time_period_is_open(period, as_of) for period in periods)
+
+
+def clear_expired_home_time_status(
+    as_of_date: date | None = None,
+) -> int:
+    """
+    Set drivers whose home time has ended back to Active (available, no truck).
+
+    Idempotent. Skips drivers who still have an open HOME_TIME period or an
+    ACTIVE assignment.
+    """
+    as_of = as_of_date or timezone.localdate()
+    cleared = 0
+    stuck = list(
+        Driver.objects.filter(status=DriverStatus.HOME_TIME).order_by("id")
+    )
+    for driver in stuck:
+        if _driver_has_open_home_time(driver, as_of):
+            continue
+        if get_current_assignment_for_driver(driver) is not None:
+            continue
+        driver.status = DriverStatus.ACTIVE
+        driver.save(update_fields=["status", "updated_at"])
+        cleared += 1
+    return cleared
+
+
+def demote_future_active_assignments(as_of_date: date | None = None) -> int:
+    """ACTIVE with start_date in the future → PLANNED (not yet on the truck)."""
+    as_of = as_of_date or timezone.localdate()
+    demoted = 0
+    future_active = list(
+        RelayAssignment.objects.filter(
+            status=AssignmentStatus.ACTIVE,
+            start_date__gt=as_of,
+        )
+        .select_related("truck", "driver")
+        .order_by("start_date", "id")
+    )
+    for assignment in future_active:
+        assignment.status = AssignmentStatus.PLANNED
+        assignment.save(update_fields=["status", "updated_at"])
+        _clear_otr_status_period(assignment)
+        _sync_planned_home_time_period(assignment)
+        _release_truck_from_assignment(assignment)
+        demoted += 1
+    return demoted
 
 
 @transaction.atomic
@@ -874,71 +1026,77 @@ def process_relay_state(as_of_date: date | None = None) -> ProcessRelayResult:
 
     Safe to run via management command or before board render.
     Does not create duplicate DriverStatusPeriod rows.
+
+    Runs complete → activate in a short loop so a newly activated assignment
+    that is already past its end is completed in the same pass.
     """
     as_of = as_of_date or timezone.localdate()
     result = ProcessRelayResult()
 
-    # Complete ACTIVE assignments whose exclusive end has been reached.
-    active_assignments = list(
-        RelayAssignment.objects.filter(status=AssignmentStatus.ACTIVE)
-        .select_related("truck", "driver")
-        .order_by("start_date", "id")
-    )
-    for assignment in active_assignments:
-        if as_of >= assignment.effective_end_date:
+    # ACTIVE that hasn't started yet is a schedule, not current occupancy.
+    result.demoted = demote_future_active_assignments(as_of)
+
+    # Stabilize occupancy: complete due actives, activate due planned, repeat
+    # briefly so catch-up dates (e.g. activate then already overdue) settle.
+    for _ in range(5):
+        progressed = False
+
+        active_assignments = list(
+            RelayAssignment.objects.filter(status=AssignmentStatus.ACTIVE)
+            .select_related("truck", "driver")
+            .order_by("start_date", "id")
+        )
+        for assignment in active_assignments:
+            if as_of < assignment.effective_end_date:
+                continue
             before_driver = assignment.truck.current_driver_id
-            complete_assignment(assignment, actual_end_date=assignment.effective_end_date)
+            complete_assignment(
+                assignment,
+                actual_end_date=assignment.effective_end_date,
+                as_of_date=as_of,
+            )
             result.completed += 1
+            progressed = True
             assignment.truck.refresh_from_db()
             if assignment.truck.current_driver_id is None:
                 result.yarded += 1
             elif assignment.truck.current_driver_id != before_driver:
                 result.activated += 1
 
-    # Activate PLANNED whose start has arrived and no conflicting ACTIVE remains.
-    planned = list(
-        RelayAssignment.objects.filter(
-            status=AssignmentStatus.PLANNED,
-            start_date__lte=as_of,
-        )
-        .select_related("truck", "driver")
-        .order_by("start_date", "id")
-    )
-    for assignment in planned:
-        other_active = (
+        planned = list(
             RelayAssignment.objects.filter(
-                truck_id=assignment.truck_id,
-                status=AssignmentStatus.ACTIVE,
+                status=AssignmentStatus.PLANNED,
+                start_date__lte=as_of,
             )
-            .exclude(pk=assignment.pk)
-            .exists()
+            .select_related("truck", "driver")
+            .order_by("start_date", "id")
         )
-        if other_active:
-            continue
-        try:
-            activate_assignment(assignment)
-            result.activated += 1
-        except ValidationError:
-            continue
+        for assignment in planned:
+            other_active = (
+                RelayAssignment.objects.filter(
+                    truck_id=assignment.truck_id,
+                    status=AssignmentStatus.ACTIVE,
+                )
+                .exclude(pk=assignment.pk)
+                .exists()
+            )
+            if other_active:
+                continue
+            try:
+                activate_assignment(assignment)
+                result.activated += 1
+                progressed = True
+            except ValidationError:
+                continue
 
+        if not progressed:
+            break
+
+    result.home_time_cleared = clear_expired_home_time_status(as_of)
     return result
 
 
 # --- Assignment lifecycle (source of truth) ---
-
-
-def _iter_weeks(start_date: date, end_date: date) -> list[tuple[date, date]]:
-    weeks: list[tuple[date, date]] = []
-    current = start_date - timedelta(days=start_date.weekday())
-    while current <= end_date:
-        week_end = current + timedelta(days=6)
-        weeks.append((current, week_end))
-        current += timedelta(days=7)
-    return weeks
-
-
-def _week_overlaps(week_start: date, week_end: date, period_start: date, period_end: date) -> bool:
-    return week_start <= period_end and week_end >= period_start
 
 
 @transaction.atomic
@@ -990,7 +1148,7 @@ def create_assignment(
     truck: Truck,
     start_date: date,
     cycle_weeks: int = DEFAULT_CYCLE_WEEKS,
-    home_time_weeks: int = DEFAULT_HOME_TIME_WEEKS,
+    home_time_days: int = DEFAULT_HOME_TIME_DAYS,
     created_by: User | None = None,
     status: str = AssignmentStatus.ACTIVE,
     notes: str = "",
@@ -998,6 +1156,10 @@ def create_assignment(
 ) -> RelayAssignment:
     if expected_end_date is None:
         expected_end_date = calculate_expected_end_date(start_date, cycle_weeks)
+    else:
+        if expected_end_date <= start_date:
+            raise ValidationError("Home time date must be after start date.")
+        cycle_weeks = cycle_weeks_from_dates(start_date, expected_end_date)
 
     create_status = (
         AssignmentStatus.PLANNED
@@ -1011,7 +1173,7 @@ def create_assignment(
         start_date=start_date,
         expected_end_date=expected_end_date,
         cycle_weeks=cycle_weeks,
-        home_time_weeks=home_time_weeks,
+        home_time_days=home_time_days,
         status=create_status,
         notes=notes,
         created_by=created_by,
@@ -1020,7 +1182,13 @@ def create_assignment(
     assignment.save()
 
     if status == AssignmentStatus.ACTIVE:
+        if start_date > timezone.localdate():
+            # Not yet started — keep Planned until process_relay_state / start day.
+            _sync_planned_home_time_period(assignment)
+            return assignment
         return activate_assignment(assignment)
+    if create_status == AssignmentStatus.PLANNED:
+        _sync_planned_home_time_period(assignment)
     return assignment
 
 
@@ -1028,6 +1196,8 @@ def create_assignment(
 def complete_assignment(
     assignment: RelayAssignment,
     actual_end_date: date | None = None,
+    home_time_days: int | None = None,
+    as_of_date: date | None = None,
 ) -> RelayAssignment:
     assignment = (
         RelayAssignment.objects.select_related("truck", "driver", "next_assignment")
@@ -1040,11 +1210,19 @@ def complete_assignment(
     if assignment.status == AssignmentStatus.CANCELLED:
         raise ValidationError("Cannot complete a cancelled assignment.")
 
+    as_of = as_of_date or timezone.localdate()
     if actual_end_date is None:
-        actual_end_date = timezone.localdate()
+        actual_end_date = as_of
 
     if actual_end_date < assignment.start_date:
         raise ValidationError("actual_end_date cannot be before start_date.")
+    if actual_end_date > as_of:
+        raise ValidationError("actual_end_date cannot be in the future.")
+
+    if home_time_days is not None:
+        if home_time_days < 1 or home_time_days > 60:
+            raise ValidationError("Home time days must be between 1 and 60.")
+        assignment.home_time_days = home_time_days
 
     truck = assignment.truck
     next_planned = (
@@ -1081,14 +1259,25 @@ def complete_assignment(
     assignment.save()
 
     _close_otr_status_period(assignment, actual_end_date)
-    _create_home_time_period(assignment, actual_end_date)
+    home_period = _create_home_time_period(assignment, actual_end_date)
 
     driver = assignment.driver
-    driver.status = DriverStatus.HOME_TIME
+    if _home_time_period_is_open(home_period, as_of):
+        driver.status = DriverStatus.HOME_TIME
+    else:
+        # Home window already ended (backdated completion) — available again.
+        driver.status = DriverStatus.ACTIVE
     driver.save(update_fields=["status", "updated_at"])
 
     if next_planned:
-        activate_assignment(next_planned)
+        activated = activate_assignment(next_planned)
+        # Catch-up: planned that starts and already ends on/before as_of.
+        if as_of >= activated.effective_end_date:
+            return complete_assignment(
+                activated,
+                actual_end_date=activated.effective_end_date,
+                as_of_date=as_of,
+            )
     else:
         truck.current_driver = None
         truck.status = TruckStatus.YARD
@@ -1097,13 +1286,75 @@ def complete_assignment(
     return assignment
 
 
+def get_open_home_time_period(driver: Driver) -> DriverStatusPeriod | None:
+    """Latest HOME_TIME period that is still open as of today (start <= today < end)."""
+    today = timezone.localdate()
+    periods = (
+        DriverStatusPeriod.objects.filter(
+            driver=driver,
+            status=DriverPeriodStatus.HOME_TIME,
+        )
+        .select_related("assignment", "assignment__truck")
+        .order_by("-start_date", "-id")
+    )
+    for period in periods:
+        if _home_time_period_is_open(period, today):
+            return period
+    return None
+
+
+@transaction.atomic
+def update_driver_home_time_period(
+    period: DriverStatusPeriod,
+    end_date: date,
+) -> DriverStatusPeriod:
+    """
+    Change exclusive end of an open HOME_TIME DriverStatusPeriod.
+
+    Syncs assignment.home_time_days when linked. If end_date <= today, marks
+    the driver Active (available for work).
+    """
+    if period.status != DriverPeriodStatus.HOME_TIME:
+        raise ValidationError("Only home time periods can be updated this way.")
+    if end_date <= period.start_date:
+        raise ValidationError("Home time end date must be after start date.")
+
+    days = (end_date - period.start_date).days
+    if days < 1 or days > 60:
+        raise ValidationError("Home time duration must be between 1 and 60 days.")
+
+    period.end_date = end_date
+    period.save(update_fields=["end_date", "updated_at"])
+
+    assignment = period.assignment
+    if assignment is not None:
+        assignment.home_time_days = days
+        assignment.save(update_fields=["home_time_days", "updated_at"])
+
+    driver = period.driver
+    today = timezone.localdate()
+    if end_date <= today:
+        if driver.status == DriverStatus.HOME_TIME:
+            driver.status = DriverStatus.ACTIVE
+            driver.save(update_fields=["status", "updated_at"])
+    elif period.start_date <= today < end_date:
+        if driver.status != DriverStatus.HOME_TIME:
+            driver.status = DriverStatus.HOME_TIME
+            driver.save(update_fields=["status", "updated_at"])
+    elif period.start_date > today and driver.status == DriverStatus.HOME_TIME:
+        driver.status = DriverStatus.ACTIVE
+        driver.save(update_fields=["status", "updated_at"])
+
+    return period
+
+
 @transaction.atomic
 def assign_next_driver(
     previous_assignment: RelayAssignment,
     next_driver: Driver,
     start_date: date | None = None,
     cycle_weeks: int = DEFAULT_CYCLE_WEEKS,
-    home_time_weeks: int = DEFAULT_HOME_TIME_WEEKS,
+    home_time_days: int = DEFAULT_HOME_TIME_DAYS,
     created_by: User | None = None,
     activate: bool = False,
 ) -> RelayAssignment:
@@ -1118,7 +1369,7 @@ def assign_next_driver(
         truck=previous_assignment.truck,
         start_date=start_date,
         cycle_weeks=cycle_weeks,
-        home_time_weeks=home_time_weeks,
+        home_time_days=home_time_days,
         created_by=created_by,
         status=status,
     )
@@ -1130,116 +1381,3 @@ def assign_next_driver(
     previous_assignment.save(update_fields=["next_assignment", "updated_at"])
 
     return next_assignment
-
-
-def get_driver_timeline(
-    driver: Driver,
-    start_date: date,
-    end_date: date,
-) -> list[WeekSegment]:
-    assignments = RelayAssignment.objects.filter(
-        driver=driver,
-        start_date__lte=end_date,
-    ).exclude(status=AssignmentStatus.CANCELLED)
-
-    segments: list[WeekSegment] = []
-    for week_start, week_end in _iter_weeks(start_date, end_date):
-        status = TimelineStatus.OPEN
-        label = "Open"
-        assignment_id = None
-        truck_unit = None
-
-        for assignment in assignments:
-            otr_end = assignment.expected_end_date - timedelta(days=1)
-            if assignment.status == AssignmentStatus.COMPLETED and assignment.actual_end_date:
-                otr_end = assignment.actual_end_date - timedelta(days=1)
-
-            otr_start = assignment.start_date
-            home_start = assignment.actual_end_date or assignment.expected_end_date
-            home_end = _home_time_end(assignment) - timedelta(days=1)
-
-            if _week_overlaps(week_start, week_end, otr_start, otr_end):
-                status = TimelineStatus.OTR
-                label = f"OTR — {assignment.truck.unit_number}"
-                assignment_id = assignment.id
-                truck_unit = assignment.truck.unit_number
-                break
-
-            if assignment.status == AssignmentStatus.COMPLETED and _week_overlaps(
-                week_start, week_end, home_start, home_end
-            ):
-                status = TimelineStatus.HOME_TIME
-                label = "Home Time"
-                assignment_id = assignment.id
-                break
-
-        segments.append(
-            WeekSegment(
-                week_start=week_start,
-                week_end=week_end,
-                status=status,
-                label=label,
-                assignment_id=assignment_id,
-                truck_unit=truck_unit,
-            )
-        )
-
-    return segments
-
-
-def get_truck_timeline(
-    truck: Truck,
-    start_date: date,
-    end_date: date,
-) -> list[WeekSegment]:
-    data = _resolve_board_data(truck)
-    assignments = RelayAssignment.objects.filter(
-        truck=truck,
-        start_date__lte=end_date,
-    ).exclude(status=AssignmentStatus.CANCELLED).select_related("driver")
-
-    segments: list[WeekSegment] = []
-    for week_start, week_end in _iter_weeks(start_date, end_date):
-        status = TimelineStatus.OPEN
-        label = "Needs Driver"
-        assignment_id = None
-        driver_name = None
-
-        if data["cycle_start_date"] and data["expected_home_date"]:
-            otr_end = data["expected_home_date"] - timedelta(days=1)
-            if _week_overlaps(week_start, week_end, data["cycle_start_date"], otr_end):
-                status = TimelineStatus.OTR
-                label = f"OTR — {data['current_driver'].full_name if data['current_driver'] else 'Unknown'}"
-                driver_name = data["current_driver"].full_name if data["current_driver"] else None
-
-        if status == TimelineStatus.OPEN:
-            for assignment in assignments:
-                otr_end = assignment.expected_end_date - timedelta(days=1)
-                if _week_overlaps(week_start, week_end, assignment.start_date, otr_end):
-                    status = TimelineStatus.OTR
-                    label = f"OTR — {assignment.driver.full_name}"
-                    assignment_id = assignment.id
-                    driver_name = assignment.driver.full_name
-                    break
-
-        if status == TimelineStatus.OPEN:
-            if data["truck_status"] == TruckStatus.YARD:
-                status = TimelineStatus.YARD
-                label = "Yard"
-            elif not data["current_driver"]:
-                status = TimelineStatus.OPEN
-                label = "Needs Driver"
-
-        segments.append(
-            WeekSegment(
-                week_start=week_start,
-                week_end=week_end,
-                status=status,
-                label=label,
-                assignment_id=assignment_id,
-                driver_name=driver_name,
-                truck_unit=truck.unit_number,
-            )
-        )
-
-    return segments

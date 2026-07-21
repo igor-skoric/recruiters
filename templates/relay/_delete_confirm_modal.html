@@ -1,0 +1,29 @@
+{% if can_delete %}
+<dialog class="app-modal app-modal-narrow" id="modal-delete-confirm">
+    <form method="post" action="#" class="modal-panel" data-delete-confirm-form>
+        {% csrf_token %}
+        <header class="modal-header">
+            <div class="modal-header-main">
+                <span class="modal-icon modal-icon-danger" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                </span>
+                <div>
+                    <h2>Delete <span data-delete-kind-label>record</span>?</h2>
+                    <p class="help-text">This cannot be undone.</p>
+                </div>
+            </div>
+            <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
+        </header>
+        <div class="modal-body">
+            <p class="delete-confirm-copy">
+                Are you sure you want to delete
+                <strong data-delete-name></strong>?
+            </p>
+        </div>
+        <footer class="modal-footer">
+            <button type="button" class="btn btn-secondary-light" data-modal-close>Cancel</button>
+            <button type="submit" class="btn btn-danger">Delete</button>
+        </footer>
+    </form>
+</dialog>
+{% endif %}

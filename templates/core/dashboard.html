@@ -6,8 +6,67 @@
 <section class="dashboard-page">
     <header class="page-header">
         <h1>Dashboard</h1>
-        <p>Workspace overview for your account.</p>
+        <p>Fleet overview and account details.</p>
     </header>
+
+    <div class="kpi-grid kpi-grid-dashboard">
+        <article class="kpi-card">
+            <div class="kpi-card-head">
+                <span class="kpi-label">Total Trucks</span>
+                <span class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17h4V5H2v12h3"/><path d="M14 17h5l3-5v-2h-8v7z"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
+            </div>
+            <div class="kpi-value">{{ fleet_summary.total }}</div>
+            <div class="kpi-desc">Active fleet units</div>
+        </article>
+        <article class="kpi-card">
+            <div class="kpi-card-head">
+                <span class="kpi-label">Occupied</span>
+                <span class="kpi-icon kpi-icon-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+            </div>
+            <div class="kpi-value">{{ fleet_summary.otr }}</div>
+            <div class="kpi-desc">Currently on the road</div>
+        </article>
+        <article class="kpi-card">
+            <div class="kpi-card-head">
+                <span class="kpi-label">Available</span>
+                <span class="kpi-icon kpi-icon-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span>
+            </div>
+            <div class="kpi-value">{{ fleet_summary.available }}</div>
+            <div class="kpi-desc">Ready for assignment</div>
+        </article>
+        <article class="kpi-card">
+            <div class="kpi-card-head">
+                <span class="kpi-label">Needs Planning</span>
+                <span class="kpi-icon kpi-icon-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="m10.3 3.9-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.1l-8-14a2 2 0 0 0-3.4 0z"/></svg></span>
+            </div>
+            <div class="kpi-value">{{ fleet_summary.needs_review }}</div>
+            <div class="kpi-desc">Missing next driver plan</div>
+        </article>
+        <article class="kpi-card">
+            <div class="kpi-card-head">
+                <span class="kpi-label">Maintenance</span>
+                <span class="kpi-icon kpi-icon-muted"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 1 0 5.7l-7.7 7.7-4-4 7.7-7.7a4 4 0 0 1 5.7 0z"/><path d="m5 19 2 2"/></svg></span>
+            </div>
+            <div class="kpi-value">{{ fleet_summary.maintenance }}</div>
+            <div class="kpi-desc">Unavailable units</div>
+        </article>
+        <article class="kpi-card">
+            <div class="kpi-card-head">
+                <span class="kpi-label">Drivers on Home Time</span>
+                <span class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg></span>
+            </div>
+            <div class="kpi-value">{{ drivers_home_time }}</div>
+            <div class="kpi-desc">Drivers resting at home</div>
+        </article>
+        <article class="kpi-card">
+            <div class="kpi-card-head">
+                <span class="kpi-label">Cycles Ending Soon</span>
+                <span class="kpi-icon kpi-icon-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+            </div>
+            <div class="kpi-value">{{ cycles_ending_soon }}</div>
+            <div class="kpi-desc">Within the next 7 days</div>
+        </article>
+    </div>
 
     <section class="card-grid">
         <article class="card">

@@ -7,12 +7,55 @@
     <div class="list-toolbar">
         <div>
             <h1>Trucks</h1>
-            <p class="text-muted">{{ trucks|length }} trucks in the fleet</p>
+            <p class="text-muted">{{ result_count }} truck{{ result_count|pluralize }}{% if filter_active %} matched in database{% else %} in the fleet{% endif %}</p>
         </div>
-        {% if can_edit %}
-            <button type="button" class="btn btn-primary" data-modal-open="truck">+ Truck</button>
+        {% if can_create %}
+            <div class="list-toolbar-actions">
+                <button type="button" class="btn btn-secondary-light" data-modal-open="import-trucks">Import</button>
+                <button type="button" class="btn btn-primary" data-modal-open="truck">+ Truck</button>
+            </div>
         {% endif %}
     </div>
+
+    <form class="list-filters" method="get" action="{% url 'relay:trucks' %}">
+        <div class="list-filters-row">
+            <div class="list-filter-search">
+                <label class="sr-only" for="truck-search">Search</label>
+                <input
+                    id="truck-search"
+                    class="form-control"
+                    type="search"
+                    name="q"
+                    value="{{ filters.q }}"
+                    placeholder="Search unit, VIN, make, model, driver…"
+                >
+            </div>
+            <div class="list-filter-field">
+                <label class="sr-only" for="truck-status">Status</label>
+                <select id="truck-status" class="form-control" name="status" onchange="this.form.requestSubmit()">
+                    <option value="">Status: All</option>
+                    {% for value, label in status_choices %}
+                        <option value="{{ value }}"{% if filters.status == value %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="list-filter-field">
+                <label class="sr-only" for="truck-assigned">Assignment</label>
+                <select id="truck-assigned" class="form-control" name="assigned" onchange="this.form.requestSubmit()">
+                    <option value="">Driver: All</option>
+                    <option value="yes"{% if filters.assigned == "yes" %} selected{% endif %}>Has current driver</option>
+                    <option value="no"{% if filters.assigned == "no" %} selected{% endif %}>No current driver</option>
+                </select>
+            </div>
+            <div class="list-filter-actions">
+                <input type="hidden" name="per_page" value="{{ filters.per_page|default:per_page }}">
+                <button type="submit" class="btn btn-primary">Filter</button>
+                {% if filter_active %}
+                    <a class="btn btn-secondary-light" href="{% url 'relay:trucks' %}">Clear</a>
+                {% endif %}
+            </div>
+        </div>
+    </form>
 
     <section class="card" style="padding:0;overflow:hidden;">
         {% if trucks %}
@@ -45,7 +88,44 @@
                                 </td>
                                 <td>{{ truck.make }} {{ truck.model }}</td>
                                 <td>
-                                    <a class="btn btn-secondary-light btn-sm" href="{% url 'relay:truck_detail' truck.pk %}">Open</a>
+                                    <div class="table-row-actions">
+                                        {% if can_edit %}
+                                            <button
+                                                type="button"
+                                                class="btn btn-icon btn-secondary-light btn-sm"
+                                                data-modal-open="truck-edit"
+                                                data-edit-prefix="edit_truck"
+                                                data-edit-action="{% url 'relay:truck_edit' truck.pk %}"
+                                                data-field-unit_number="{{ truck.unit_number }}"
+                                                data-field-driver_id="{% if truck.current_driver and truck.current_driver.driver_id %}{{ truck.current_driver.driver_id }}{% endif %}"
+                                                data-field-status="{{ truck.status }}"
+                                                data-field-make="{{ truck.make }}"
+                                                data-field-model="{{ truck.model }}"
+                                                data-field-year="{% if truck.year %}{{ truck.year }}{% endif %}"
+                                                data-field-vin="{{ truck.vin }}"
+                                                data-field-notes="{{ truck.notes }}"
+                                                aria-label="Edit truck {{ truck.unit_number }}"
+                                                title="Edit"
+                                            >
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                            </button>
+                                        {% endif %}
+                                        {% if can_delete %}
+                                            <button
+                                                type="button"
+                                                class="btn btn-icon btn-danger-light btn-sm"
+                                                data-modal-open="delete-confirm"
+                                                data-delete-action="{% url 'relay:truck_delete' truck.pk %}"
+                                                data-delete-name="{{ truck.unit_number }}"
+                                                data-delete-kind="truck"
+                                                aria-label="Delete truck {{ truck.unit_number }}"
+                                                title="Delete"
+                                            >
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                                            </button>
+                                        {% endif %}
+                                        <a class="btn btn-secondary-light btn-sm" href="{% url 'relay:truck_detail' truck.pk %}">Open</a>
+                                    </div>
                                 </td>
                             </tr>
                         {% endfor %}
@@ -53,12 +133,19 @@
                 </table>
             </div>
         {% else %}
-            <p class="empty-state">No trucks yet.</p>
+            <p class="empty-state">{% if filter_active %}No trucks match these filters.{% else %}No trucks yet.{% endif %}</p>
         {% endif %}
     </section>
+
+    {% include "relay/_list_pagination.html" with page_size_id="truck-page-size" %}
 </section>
 
-{% if can_edit %}
+{% if can_create %}
 {% include "relay/_create_modals.html" %}
+{% include "relay/_import_modal.html" with import_kind="trucks" %}
 {% endif %}
+{% if can_edit %}
+{% include "relay/_edit_modals.html" %}
+{% endif %}
+{% include "relay/_delete_confirm_modal.html" %}
 {% endblock %}

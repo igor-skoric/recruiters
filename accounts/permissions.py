@@ -26,15 +26,48 @@ def user_has_read_access(user) -> bool:
         return False
     if user.is_superuser:
         return True
-    return user.role.access_level in {AccessLevel.READ, AccessLevel.FULL}
+    return user.role.access_level in {AccessLevel.READ, AccessLevel.FULL} or any(
+        (
+            user.role.can_create,
+            user.role.can_edit,
+            user.role.can_delete,
+        )
+    )
 
 
-def user_has_full_access(user) -> bool:
+def _user_has_capability(user, capability: str) -> bool:
     if not user.is_authenticated:
         return False
     if user.is_superuser:
         return True
-    return user.role.access_level == AccessLevel.FULL
+    role = getattr(user, "role", None)
+    if role is None:
+        return False
+    return bool(getattr(role, capability, False))
+
+
+def user_can_create(user) -> bool:
+    """Add/import drivers and trucks."""
+    return _user_has_capability(user, "can_create")
+
+
+def user_can_edit(user) -> bool:
+    """Edit drivers/trucks and manage relay assignments."""
+    return _user_has_capability(user, "can_edit")
+
+
+def user_can_delete(user) -> bool:
+    """Delete drivers and trucks."""
+    return _user_has_capability(user, "can_delete")
+
+
+def user_has_full_access(user) -> bool:
+    """
+    Backward-compatible write check.
+
+    Prefer user_can_create / user_can_edit / user_can_delete for new code.
+    """
+    return user_can_edit(user)
 
 
 def permission_denied_response(request: HttpRequest) -> HttpResponse:
@@ -71,36 +104,30 @@ def role_required(role_slug: str) -> Callable:
     return decorator
 
 
-def read_access_required(view_func: Callable | None = None) -> Callable:
-    def decorator(func: Callable) -> Callable:
-        @login_required
-        @wraps(func)
-        def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-            if not user_has_read_access(request.user):
-                return permission_denied_response(request)
-            return func(request, *args, **kwargs)
+def _capability_required(capability_check: Callable) -> Callable:
+    def decorator(view_func: Callable | None = None) -> Callable:
+        def _decorate(func: Callable) -> Callable:
+            @login_required
+            @wraps(func)
+            def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+                if not capability_check(request.user):
+                    return permission_denied_response(request)
+                return func(request, *args, **kwargs)
 
-        return wrapper
+            return wrapper
 
-    if view_func is not None:
-        return decorator(view_func)
+        if view_func is not None:
+            return _decorate(view_func)
+        return _decorate
+
     return decorator
 
 
-def full_access_required(view_func: Callable | None = None) -> Callable:
-    def decorator(func: Callable) -> Callable:
-        @login_required
-        @wraps(func)
-        def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-            if not user_has_full_access(request.user):
-                return permission_denied_response(request)
-            return func(request, *args, **kwargs)
-
-        return wrapper
-
-    if view_func is not None:
-        return decorator(view_func)
-    return decorator
+read_access_required = _capability_required(user_has_read_access)
+full_access_required = _capability_required(user_has_full_access)
+create_access_required = _capability_required(user_can_create)
+edit_access_required = _capability_required(user_can_edit)
+delete_access_required = _capability_required(user_can_delete)
 
 
 class LoginRequiredMixin:

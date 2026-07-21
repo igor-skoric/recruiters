@@ -5,7 +5,14 @@ from departments.models import AccessLevel, Department, Role
 INITIAL_DATA = [
     {
         "department": {"name": "IT", "slug": "it"},
-        "role": {"name": "Admin", "slug": "admin", "access_level": AccessLevel.FULL},
+        "role": {
+            "name": "Admin",
+            "slug": "admin",
+            "access_level": AccessLevel.FULL,
+            "can_create": True,
+            "can_edit": True,
+            "can_delete": True,
+        },
     },
     {
         "department": {"name": "Recruiting", "slug": "recruiting"},
@@ -13,6 +20,9 @@ INITIAL_DATA = [
             "name": "Read Only",
             "slug": "read-only",
             "access_level": AccessLevel.READ,
+            "can_create": False,
+            "can_edit": False,
+            "can_delete": False,
         },
     },
 ]
@@ -48,6 +58,9 @@ class Command(BaseCommand):
                 defaults={
                     "name": role_data["name"],
                     "access_level": role_data["access_level"],
+                    "can_create": role_data.get("can_create", False),
+                    "can_edit": role_data.get("can_edit", False),
+                    "can_delete": role_data.get("can_delete", False),
                     "is_active": True,
                 },
             )

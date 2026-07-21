@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+import json
 
 from django.utils import timezone
 
@@ -59,6 +60,11 @@ class WeekCircle:
     tooltip: str
     is_current: bool = False
     assignments: list[AssignmentWeekHit] = field(default_factory=list)
+    days: list[dict] = field(default_factory=list)
+
+    @property
+    def days_json(self) -> str:
+        return json.dumps(self.days)
 
 
 def periods_overlap(start_a: date, end_a: date, start_b: date, end_b: date) -> bool:
@@ -119,6 +125,71 @@ def _status_label(status: str) -> str:
     }.get(status, status)
 
 
+DAY_STATUS_FILTERS = (
+    ("", "All statuses"),
+    (TruckWeekStatus.AVAILABLE, "Available"),
+    (TruckWeekStatus.OCCUPIED, "Occupied"),
+    (TruckWeekStatus.NEEDS_PLANNING, "Needs Planning"),
+    (TruckWeekStatus.UNAVAILABLE, "Unavailable"),
+)
+
+
+def resolve_truck_day_status(
+    truck: Truck,
+    assignments: list[RelayAssignment],
+    day: date,
+    *,
+    today: date | None = None,
+) -> dict:
+    """Status of one truck on a single calendar day (for board filters)."""
+    today = today or timezone.localdate()
+    day_labels = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+    if truck.status in {TruckStatus.INACTIVE, TruckStatus.MAINTENANCE}:
+        return {
+            "status": TruckWeekStatus.UNAVAILABLE,
+            "status_label": _status_label(TruckWeekStatus.UNAVAILABLE),
+            "driver": "",
+            "day": day,
+            "label": day_labels[day.weekday()],
+            "date": f"{day:%b} {day.day}",
+        }
+
+    active = [a for a in assignments if a.status != AssignmentStatus.CANCELLED]
+    for assignment in active:
+        if assignment.start_date <= day < assignment.effective_end_date:
+            return {
+                "status": TruckWeekStatus.OCCUPIED,
+                "status_label": _status_label(TruckWeekStatus.OCCUPIED),
+                "driver": assignment.driver.full_name,
+                "day": day,
+                "label": day_labels[day.weekday()],
+                "date": f"{day:%b} {day.day}",
+            }
+
+    prior = [a for a in active if a.effective_end_date <= day]
+    upcoming = [a for a in active if a.start_date > day]
+    last_end = max((a.effective_end_date for a in prior), default=None)
+    next_start = min((a.start_date for a in upcoming), default=None)
+
+    in_open_gap = last_end is not None and (
+        next_start is None or day < next_start
+    )
+    needs_next = in_open_gap and next_start is None and day >= today
+    status = (
+        TruckWeekStatus.NEEDS_PLANNING if needs_next else TruckWeekStatus.AVAILABLE
+    )
+
+    return {
+        "status": status,
+        "status_label": _status_label(status),
+        "driver": "",
+        "day": day,
+        "label": day_labels[day.weekday()],
+        "date": f"{day:%b} {day.day}",
+    }
+
+
 def build_truck_week_tooltip(
     header: WeekHeader,
     status: str,
@@ -167,6 +238,44 @@ def build_truck_week_tooltip(
     return " | ".join(parts)
 
 
+def build_truck_week_days(
+    truck: Truck,
+    assignments: list[RelayAssignment],
+    header: WeekHeader,
+) -> list[dict]:
+    """Mon–Sun occupancy for hover preview (one entry per calendar day in the ISO week)."""
+    day_labels = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    unavailable = truck.status in {TruckStatus.INACTIVE, TruckStatus.MAINTENANCE}
+    days: list[dict] = []
+
+    for index in range(7):
+        day = header.week_start + timedelta(days=index)
+        if day >= header.week_end:
+            break
+
+        status = TruckWeekStatus.UNAVAILABLE if unavailable else TruckWeekStatus.AVAILABLE
+        driver = ""
+        if not unavailable:
+            for assignment in assignments:
+                if assignment.status == AssignmentStatus.CANCELLED:
+                    continue
+                if assignment.start_date <= day < assignment.effective_end_date:
+                    status = TruckWeekStatus.OCCUPIED
+                    driver = assignment.driver.full_name
+                    break
+
+        days.append(
+            {
+                "label": day_labels[index],
+                "date": f"{day:%b} {day.day}",
+                "iso": day.isoformat(),
+                "status": status,
+                "driver": driver,
+            }
+        )
+    return days
+
+
 def resolve_truck_week_circle(
     truck: Truck,
     assignments: list[RelayAssignment],
@@ -176,6 +285,7 @@ def resolve_truck_week_circle(
 ) -> WeekCircle:
     today = today or timezone.localdate()
     week_start, week_end = header.week_start, header.week_end
+    days = build_truck_week_days(truck, assignments, header)
 
     if truck.status in {TruckStatus.INACTIVE, TruckStatus.MAINTENANCE}:
         tooltip = build_truck_week_tooltip(
@@ -191,6 +301,7 @@ def resolve_truck_week_circle(
             status_label=_status_label(TruckWeekStatus.UNAVAILABLE),
             tooltip=tooltip,
             is_current=header.is_current,
+            days=days,
         )
 
     hits: list[AssignmentWeekHit] = []
@@ -217,6 +328,7 @@ def resolve_truck_week_circle(
             tooltip=tooltip,
             is_current=header.is_current,
             assignments=hits,
+            days=days,
         )
 
     prior = [a for a in assignments if a.effective_end_date <= week_start]
@@ -246,6 +358,7 @@ def resolve_truck_week_circle(
         status_label=_status_label(status),
         tooltip=tooltip,
         is_current=header.is_current,
+        days=days,
     )
 
 

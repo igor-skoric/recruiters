@@ -31,7 +31,7 @@ class RelayAssignmentAdmin(admin.ModelAdmin):
         "actual_end_date",
         "status",
         "cycle_weeks",
-        "home_time_weeks",
+        "home_time_days",
     )
     list_filter = ("status", "start_date")
     search_fields = (

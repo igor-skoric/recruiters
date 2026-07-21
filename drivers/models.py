@@ -16,6 +16,14 @@ class DriverType(models.TextChoices):
 
 class Driver(models.Model):
     # TODO: Sync driver records from Pro Transport PostgreSQL database.
+    driver_id = models.CharField(
+        "Driver ID",
+        max_length=64,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text="Source Driver ID used for import linking (same value as in Excel).",
+    )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     phone = models.CharField(max_length=30, blank=True)
@@ -40,6 +48,11 @@ class Driver(models.Model):
 
     def __str__(self) -> str:
         return self.full_name
+
+    def save(self, *args, **kwargs):
+        if self.driver_id is not None:
+            self.driver_id = self.driver_id.strip() or None
+        super().save(*args, **kwargs)
 
     @property
     def full_name(self) -> str:
