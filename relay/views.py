@@ -25,7 +25,7 @@ from accounts.permissions import (
     user_can_edit,
     user_has_full_access,
 )
-from drivers.models import Driver, DriverStatus, DriverType
+from drivers.models import Driver, DriverStatus, DriverType, EmploymentStatus
 from relay.forms import (
     DriverCreateForm,
     PlanNextAssignmentForm,
@@ -42,6 +42,10 @@ from relay.services import records as record_service
 from relay.services import relay_service
 from relay.services import spreadsheet_import
 from trucks.models import Truck, TruckStatus
+
+
+PAGE_SIZE_OPTIONS = (20, 50, 100)
+DEFAULT_PAGE_SIZE = 20
 
 
 def _get_week_count(request) -> int:
@@ -82,7 +86,14 @@ def _zip_week_columns(week_headers, week_circles=None) -> list[dict]:
     ]
 
 
-def _period_nav(start: date, week_count: int, *, day: date | None = None, status: str = "") -> dict:
+def _period_nav(
+    start: date,
+    week_count: int,
+    *,
+    day: date | None = None,
+    status: str = "",
+    per_page: int | None = None,
+) -> dict:
     today_monday = timezone.localdate() - timedelta(days=timezone.localdate().weekday())
     return {
         "prev_start": (start - timedelta(weeks=week_count)).isoformat(),
@@ -93,6 +104,7 @@ def _period_nav(start: date, week_count: int, *, day: date | None = None, status
         "year": start.isocalendar()[0],
         "day": day.isoformat() if day else "",
         "status": status or "",
+        "per_page": per_page or DEFAULT_PAGE_SIZE,
     }
 
 
@@ -131,13 +143,8 @@ def _build_fleet_context(request, board_rows, week_count, start_date):
     if filter_status and not filter_day:
         filter_day = timezone.localdate()
 
-    fleet_items = []
+    filtered_rows = []
     for row in board_rows:
-        circles = relay_service.get_truck_week_circles(
-            row,
-            week_headers,
-            assignments=row.assignments,
-        )
         day_info = None
         if filter_day:
             day_info = relay_service.get_truck_day_status(
@@ -147,7 +154,16 @@ def _build_fleet_context(request, board_rows, week_count, start_date):
             )
             if filter_status and day_info["status"] != filter_status:
                 continue
+        filtered_rows.append((row, day_info))
 
+    pagination = _paginate_queryset(request, filtered_rows)
+    fleet_items = []
+    for row, day_info in pagination["page_obj"].object_list:
+        circles = relay_service.get_truck_week_circles(
+            row,
+            week_headers,
+            assignments=row.assignments,
+        )
         fleet_items.append(
             {
                 "row": row,
@@ -157,26 +173,41 @@ def _build_fleet_context(request, board_rows, week_count, start_date):
             }
         )
 
+    per_page = pagination["per_page"]
+    filters = {
+        "start": start_date.isoformat(),
+        "weeks": week_count,
+        "day": filter_day.isoformat() if filter_day else "",
+        "status": filter_status,
+        "per_page": per_page,
+    }
+
     return {
         "week_headers": week_headers,
         "week_columns_header": _zip_week_columns(week_headers),
         "week_count": week_count,
         "fleet_summary": relay_service.get_fleet_summary(board_rows),
         "fleet_items": fleet_items,
-        "fleet_total_count": len(board_rows),
+        "fleet_total_count": pagination["result_count"],
         "needs_review_count": sum(1 for row in board_rows if row.needs_review),
         "can_edit": user_has_full_access(request.user),
         "driver_form": DriverCreateForm(prefix="driver"),
         "truck_form": TruckCreateForm(prefix="new_truck"),
         "open_modal": None,
         "period_nav": _period_nav(
-            start_date, week_count, day=filter_day, status=filter_status
+            start_date,
+            week_count,
+            day=filter_day,
+            status=filter_status,
+            per_page=per_page,
         ),
         "board_start": start_date,
         "filter_day": filter_day,
         "filter_status": filter_status,
         "filter_status_label": dict(relay_service.DAY_STATUS_FILTERS).get(filter_status, ""),
         "day_status_options": relay_service.DAY_STATUS_FILTERS,
+        "filters": filters,
+        **pagination,
     }
 
 
@@ -185,7 +216,6 @@ class FleetBoardView(ReadAccessRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        relay_service.process_relay_state()
         board_rows = relay_service.get_relay_board()
         week_count = _get_week_count(self.request)
         start_date = _get_board_start(self.request)
@@ -219,10 +249,9 @@ class TruckDetailView(ReadAccessRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         truck = get_object_or_404(
-            Truck.objects.select_related("current_driver"),
+            Truck.objects.select_related("current_driver", "division"),
             pk=self.kwargs["pk"],
         )
-        relay_service.process_relay_state()
         row = relay_service.get_truck_board_row(truck)
         week_count = _get_week_count(self.request)
         start_date = _get_board_start(self.request)
@@ -306,8 +335,10 @@ class DriverDetailView(ReadAccessRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        driver = get_object_or_404(Driver, pk=self.kwargs["pk"])
-        relay_service.process_relay_state()
+        driver = get_object_or_404(
+            Driver.objects.select_related("division"),
+            pk=self.kwargs["pk"],
+        )
         week_count = _get_week_count(self.request)
         start_date = _get_board_start(self.request)
         week_headers = relay_service.get_board_week_headers(week_count, start_date=start_date)
@@ -619,10 +650,6 @@ class TruckListView(ReadAccessRequiredMixin, TemplateView):
         return context
 
 
-PAGE_SIZE_OPTIONS = (20, 50, 100)
-DEFAULT_PAGE_SIZE = 20
-
-
 def _capability_context(request) -> dict:
     return {
         "can_create": user_can_create(request.user),
@@ -693,6 +720,7 @@ def _drivers_list_context(request, **overrides) -> dict:
         "filters": {**filters["values"], "per_page": pagination["per_page"]},
         "filter_active": filters["active"],
         "status_choices": DriverStatus.choices,
+        "employment_choices": EmploymentStatus.choices,
         "type_choices": DriverType.choices,
         **pagination,
         **caps,
@@ -737,9 +765,10 @@ def _trucks_list_context(request, **overrides) -> dict:
 def _driver_list_filters(request) -> dict:
     q = (request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip()
+    employment = (request.GET.get("employment") or "").strip()
     driver_type = (request.GET.get("type") or "").strip()
 
-    queryset = Driver.objects.all()
+    queryset = Driver.objects.select_related("division")
     if status == "all":
         pass
     elif status and status in DriverStatus.values:
@@ -747,6 +776,11 @@ def _driver_list_filters(request) -> dict:
     else:
         queryset = queryset.exclude(status=DriverStatus.TERMINATED)
         status = ""
+
+    if employment and employment in EmploymentStatus.values:
+        queryset = queryset.filter(employment_status=employment)
+    else:
+        employment = ""
 
     if driver_type and driver_type in DriverType.values:
         queryset = queryset.filter(driver_type=driver_type)
@@ -763,10 +797,17 @@ def _driver_list_filters(request) -> dict:
             | Q(driver_id__icontains=q)
             | Q(phone__icontains=q)
             | Q(email__icontains=q)
+            | Q(division__name__icontains=q)
+            | Q(division__dba__icontains=q)
         )
 
-    values = {"q": q, "status": status, "type": driver_type}
-    active = bool(q or status or driver_type)
+    values = {
+        "q": q,
+        "status": status,
+        "employment": employment,
+        "type": driver_type,
+    }
+    active = bool(q or status or employment or driver_type)
     return {
         "queryset": queryset.order_by("last_name", "first_name"),
         "values": values,
@@ -779,7 +820,7 @@ def _truck_list_filters(request) -> dict:
     status = (request.GET.get("status") or "").strip()
     assigned = (request.GET.get("assigned") or "").strip()
 
-    queryset = Truck.objects.select_related("current_driver")
+    queryset = Truck.objects.select_related("current_driver", "division")
     if status and status in TruckStatus.values:
         queryset = queryset.filter(status=status)
     else:
@@ -808,6 +849,8 @@ def _truck_list_filters(request) -> dict:
             | Q(current_driver__first_name__icontains=q)
             | Q(current_driver__last_name__icontains=q)
             | Q(current_driver__driver_id__icontains=q)
+            | Q(division__name__icontains=q)
+            | Q(division__dba__icontains=q)
         ).distinct()
 
     values = {"q": q, "status": status, "assigned": assigned}

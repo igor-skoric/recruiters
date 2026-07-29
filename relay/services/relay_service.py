@@ -57,6 +57,7 @@ class RelayBoardRow:
     cycle_start_date: date | None
     expected_home_date: date | None
     days_left: int | None
+    days_on_road: int | None
     next_driver: Driver | None
     next_driver_start_date: date | None
     review_status: str
@@ -503,9 +504,9 @@ def _resolve_board_data(truck: Truck) -> dict:
     Merge occupancy for the board.
 
     Priority:
-    1. ACTIVE / next PLANNED RelayAssignment (historical source of truth)
-    2. RelayStatusOverride (fallback corrections only)
-    3. Truck.current_driver / Truck.status (cache / sync)
+    1. ACTIVE / next PLANNED RelayAssignment (source of truth)
+    2. RelayStatusOverride (legacy fallback only)
+    Truck.current_driver is a derived cache and is NOT used as occupancy fallback.
     """
     override: RelayStatusOverride | None = getattr(truck, "status_override", None)
     today = timezone.localdate()
@@ -520,7 +521,7 @@ def _resolve_board_data(truck: Truck) -> dict:
         None,
     )
 
-    current_driver = truck.current_driver
+    current_driver = None
     truck_status = truck.status
     cycle_start_date = None
     expected_home_date = None
@@ -654,6 +655,16 @@ def _days_left(expected_home_date: date | None) -> int | None:
     return (expected_home_date - timezone.localdate()).days
 
 
+def _days_on_road(cycle_start_date: date | None) -> int | None:
+    """Days the current driver has already been on this assignment (from start to today)."""
+    if cycle_start_date is None:
+        return None
+    today = timezone.localdate()
+    if cycle_start_date > today:
+        return None
+    return (today - cycle_start_date).days
+
+
 def _build_board_row(truck: Truck) -> RelayBoardRow:
     data = _resolve_board_data(truck)
     review_status = _compute_review_status(
@@ -684,6 +695,7 @@ def _build_board_row(truck: Truck) -> RelayBoardRow:
         cycle_start_date=data["cycle_start_date"],
         expected_home_date=data["expected_home_date"],
         days_left=_days_left(data["expected_home_date"]),
+        days_on_road=_days_on_road(data["cycle_start_date"]),
         next_driver=data["next_driver"],
         next_driver_start_date=data["next_driver_start_date"],
         review_status=review_status,
@@ -819,6 +831,7 @@ def plan_next_assignment(
         existing.home_time_days = home_time_days
         existing.notes = notes
         existing.actual_end_date = None
+        existing.start_date_is_estimated = False
         validate_assignment_overlap(existing)
         existing.save()
         if driver_changed:
@@ -868,6 +881,8 @@ def update_assignment_home_time(
     assignment.start_date = new_start
     assignment.expected_end_date = home_time_date
     assignment.cycle_weeks = cycle_weeks_from_dates(new_start, home_time_date)
+    # Manual date confirmation/correction clears bootstrap estimated flag.
+    assignment.start_date_is_estimated = False
 
     if new_start > today:
         # Not yet started — schedule only.
@@ -939,6 +954,8 @@ def apply_home_time_side_effects(assignment: RelayAssignment) -> None:
 
 @transaction.atomic
 def cancel_planned_assignment(assignment: RelayAssignment) -> RelayAssignment:
+    Truck.objects.select_for_update().get(pk=assignment.truck_id)
+    assignment = RelayAssignment.objects.select_for_update().get(pk=assignment.pk)
     if assignment.status != AssignmentStatus.PLANNED:
         raise ValidationError("Only planned assignments can be cancelled.")
     _clear_home_time_period_for_assignment(assignment)
@@ -1024,7 +1041,7 @@ def process_relay_state(as_of_date: date | None = None) -> ProcessRelayResult:
     """
     Idempotent as-of-today processor for planned/active handoffs.
 
-    Safe to run via management command or before board render.
+    Safe to run via management command / cron only (not from GET views).
     Does not create duplicate DriverStatusPeriod rows.
 
     Runs complete → activate in a short loop so a newly activated assignment
@@ -1107,10 +1124,13 @@ def activate_assignment(assignment: RelayAssignment) -> RelayAssignment:
     Refuses when another ACTIVE assignment exists on the same truck — complete
     that assignment first for a valid handoff.
     """
+    Truck.objects.select_for_update().get(pk=assignment.truck_id)
     assignment = (
-        RelayAssignment.objects.select_related("truck", "driver")
+        RelayAssignment.objects.select_for_update()
+        .select_related("truck", "driver")
         .get(pk=assignment.pk)
     )
+    Driver.objects.select_for_update().get(pk=assignment.driver_id)
 
     other_active = (
         RelayAssignment.objects.filter(
@@ -1124,6 +1144,19 @@ def activate_assignment(assignment: RelayAssignment) -> RelayAssignment:
         raise ValidationError(
             "Truck already has an active assignment. "
             "Complete it before activating another (handoff)."
+        )
+
+    driver_elsewhere = (
+        RelayAssignment.objects.filter(
+            driver_id=assignment.driver_id,
+            status=AssignmentStatus.ACTIVE,
+        )
+        .exclude(pk=assignment.pk)
+        .exists()
+    )
+    if driver_elsewhere:
+        raise ValidationError(
+            "Driver already has an active assignment on another truck."
         )
 
     if assignment.status == AssignmentStatus.CANCELLED:
@@ -1153,7 +1186,11 @@ def create_assignment(
     status: str = AssignmentStatus.ACTIVE,
     notes: str = "",
     expected_end_date: date | None = None,
+    start_date_is_estimated: bool = False,
 ) -> RelayAssignment:
+    truck = Truck.objects.select_for_update().get(pk=truck.pk)
+    driver = Driver.objects.select_for_update().get(pk=driver.pk)
+
     if expected_end_date is None:
         expected_end_date = calculate_expected_end_date(start_date, cycle_weeks)
     else:
@@ -1176,6 +1213,7 @@ def create_assignment(
         home_time_days=home_time_days,
         status=create_status,
         notes=notes,
+        start_date_is_estimated=start_date_is_estimated,
         created_by=created_by,
     )
     validate_assignment_overlap(assignment)
@@ -1199,10 +1237,13 @@ def complete_assignment(
     home_time_days: int | None = None,
     as_of_date: date | None = None,
 ) -> RelayAssignment:
+    Truck.objects.select_for_update().get(pk=assignment.truck_id)
     assignment = (
-        RelayAssignment.objects.select_related("truck", "driver", "next_assignment")
+        RelayAssignment.objects.select_for_update()
+        .select_related("truck", "driver", "next_assignment")
         .get(pk=assignment.pk)
     )
+    Driver.objects.select_for_update().get(pk=assignment.driver_id)
 
     if assignment.status == AssignmentStatus.COMPLETED:
         return assignment

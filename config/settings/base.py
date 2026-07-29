@@ -20,6 +20,12 @@ env = environ.Env(
     DATABASE_PASSWORD=(str, ""),
     DATABASE_HOST=(str, ""),
     DATABASE_PORT=(str, ""),
+    PRO_TRANSPORT_DB_HOST=(str, ""),
+    PRO_TRANSPORT_DB_NAME=(str, ""),
+    PRO_TRANSPORT_DB_USER=(str, ""),
+    PRO_TRANSPORT_DB_PASSWORD=(str, ""),
+    PRO_TRANSPORT_DB_PORT=(str, "5432"),
+    PRO_TRANSPORT_BOOTSTRAP_DEFAULT_START_DATE=(str, ""),
 )
 
 settings_module = os.environ.get("DJANGO_SETTINGS_MODULE", "")
@@ -43,6 +49,7 @@ INSTALLED_APPS = [
     "departments",
     "core",
     "sync",
+    "companies",
     "drivers",
     "trucks",
     "relay",
@@ -104,6 +111,24 @@ else:
         if value or key in {"ENGINE", "NAME"}
     }
 
+# Optional read-only Pro Transport Postgres (master data sync only).
+PRO_TRANSPORT_DB_HOST = env("PRO_TRANSPORT_DB_HOST")
+PRO_TRANSPORT_BOOTSTRAP_DEFAULT_START_DATE = env(
+    "PRO_TRANSPORT_BOOTSTRAP_DEFAULT_START_DATE"
+)
+if PRO_TRANSPORT_DB_HOST:
+    DATABASES["pro_transport"] = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": env("PRO_TRANSPORT_DB_NAME"),
+        "USER": env("PRO_TRANSPORT_DB_USER"),
+        "PASSWORD": env("PRO_TRANSPORT_DB_PASSWORD"),
+        "HOST": PRO_TRANSPORT_DB_HOST,
+        "PORT": env("PRO_TRANSPORT_DB_PORT"),
+        "OPTIONS": {
+            "options": "-c default_transaction_read_only=on",
+        },
+    }
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -129,6 +154,10 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Admin changelists with large PT-synced tables (select-all / actions) exceed Django's
+# default of 1000 GET/POST fields.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 
 AUTH_USER_MODEL = "accounts.User"
 

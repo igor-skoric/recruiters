@@ -1092,10 +1092,11 @@ class SpreadsheetImportTests(TestCase):
         self.assertEqual(truck.year, 2022)
         self.assertEqual(Truck.objects.get(unit_number="T-202").status, TruckStatus.YARD)
 
-    def test_import_trucks_links_current_driver_by_driver_id(self):
+    def test_import_trucks_does_not_set_current_driver_without_assignment(self):
+        from relay.models import RelayAssignment
         from relay.services import spreadsheet_import
 
-        driver = Driver.objects.create(
+        Driver.objects.create(
             first_name="Link",
             last_name="Driver",
             driver_id="DRV-77",
@@ -1110,8 +1111,9 @@ class SpreadsheetImportTests(TestCase):
         result = spreadsheet_import.import_trucks(rows, create_initial_assignments=False)
         self.assertEqual(result.created, 1)
         truck = Truck.objects.get(unit_number="T-300")
-        self.assertEqual(truck.current_driver_id, driver.pk)
+        self.assertIsNone(truck.current_driver_id)
         self.assertEqual(truck.status, TruckStatus.OTR)
+        self.assertFalse(RelayAssignment.objects.filter(truck=truck).exists())
 
     def test_import_trucks_creates_initial_assignment(self):
         from datetime import timedelta
@@ -1301,6 +1303,22 @@ class ListFilterTests(TestCase):
         self.assertEqual(page2.status_code, 200)
         self.assertContains(page2, "← Prev")
 
+    def test_fleet_board_pagination(self):
+        for i in range(25):
+            Truck.objects.create(unit_number=f"P-{i:03d}")
+        self.client.force_login(self.user)
+        page1 = self.client.get("/", {"per_page": 20})
+        self.assertEqual(page1.status_code, 200)
+        self.assertContains(page1, "Show")
+        self.assertContains(page1, "per page")
+        self.assertContains(page1, "Next →")
+        self.assertContains(page1, "1–20")
+        self.assertEqual(len(page1.context["fleet_items"]), 20)
+        page2 = self.client.get("/", {"per_page": 20, "page": 2})
+        self.assertEqual(page2.status_code, 200)
+        self.assertContains(page2, "← Prev")
+        self.assertGreaterEqual(len(page2.context["fleet_items"]), 1)
+
 
 class EditListModalTests(TestCase):
     def setUp(self):
@@ -1359,7 +1377,7 @@ class EditListModalTests(TestCase):
         self.assertEqual(self.driver.first_name, "Edited")
         self.assertEqual(self.driver.status, DriverStatus.HOME_TIME)
 
-    def test_truck_edit_links_driver_by_id(self):
+    def test_truck_edit_does_not_write_current_driver_cache(self):
         self.client.force_login(self.user)
         response = self.client.post(
             f"/trucks/{self.truck.pk}/edit/",
@@ -1376,7 +1394,7 @@ class EditListModalTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.truck.refresh_from_db()
-        self.assertEqual(self.truck.current_driver_id, self.driver.pk)
+        self.assertIsNone(self.truck.current_driver_id)
         self.assertEqual(self.truck.status, TruckStatus.OTR)
         self.assertEqual(self.truck.make, "Volvo")
 
@@ -1463,3 +1481,85 @@ class DeleteRecordPermissionTests(TestCase):
         response = self.client.post(f"/trucks/{self.truck.pk}/delete/")
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Truck.objects.filter(pk=self.truck.pk).exists())
+
+
+class GetViewsDoNotMutateTests(TestCase):
+    def setUp(self):
+        from accounts.models import User
+        from departments.models import AccessLevel, Department, Role
+
+        it = Department.objects.create(name="IT", slug="it-get")
+        role = Role.objects.create(
+            name="Admin",
+            slug="admin-get",
+            department=it,
+            access_level=AccessLevel.FULL,
+        )
+        self.user = User.objects.create_user(
+            email="get@example.com",
+            password="pass12345",
+            full_name="Getter",
+            department=it,
+            role=role,
+        )
+        self.driver = Driver.objects.create(first_name="G", last_name="Driver")
+        self.truck = Truck.objects.create(unit_number="T-GET")
+        today = timezone.localdate()
+        # PLANNED that is due — process_relay_state would activate it.
+        self.planned = relay_service.create_assignment(
+            driver=self.driver,
+            truck=self.truck,
+            start_date=today - timedelta(days=1),
+            expected_end_date=today + timedelta(weeks=4),
+            status=AssignmentStatus.PLANNED,
+        )
+
+    def test_board_get_does_not_activate_due_planned(self):
+        self.client.force_login(self.user)
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.planned.refresh_from_db()
+        self.assertEqual(self.planned.status, AssignmentStatus.PLANNED)
+
+    def test_truck_detail_get_does_not_activate_due_planned(self):
+        self.client.force_login(self.user)
+        response = self.client.get(f"/trucks/{self.truck.pk}/")
+        self.assertEqual(response.status_code, 200)
+        self.planned.refresh_from_db()
+        self.assertEqual(self.planned.status, AssignmentStatus.PLANNED)
+
+
+class ActivateConcurrencyGuardTests(TestCase):
+    def test_second_activate_on_same_truck_raises(self):
+        driver_a = Driver.objects.create(first_name="A", last_name="One")
+        driver_b = Driver.objects.create(first_name="B", last_name="Two")
+        truck = Truck.objects.create(unit_number="T-LOCK")
+        today = timezone.localdate()
+        first = relay_service.create_assignment(
+            driver=driver_a,
+            truck=truck,
+            start_date=today,
+            status=AssignmentStatus.ACTIVE,
+        )
+        second = relay_service.create_assignment(
+            driver=driver_b,
+            truck=truck,
+            start_date=today + timedelta(weeks=5),
+            status=AssignmentStatus.PLANNED,
+        )
+        # Bypass model.clean overlap check to simulate a racey activate attempt.
+        RelayAssignment.objects.filter(pk=second.pk).update(
+            start_date=today,
+            expected_end_date=today + timedelta(weeks=4),
+        )
+        second.refresh_from_db()
+        with self.assertRaises(ValidationError):
+            relay_service.activate_assignment(second)
+        first.refresh_from_db()
+        self.assertEqual(first.status, AssignmentStatus.ACTIVE)
+        self.assertEqual(
+            RelayAssignment.objects.filter(
+                truck=truck, status=AssignmentStatus.ACTIVE
+            ).count(),
+            1,
+        )

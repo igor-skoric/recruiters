@@ -131,6 +131,10 @@ class RelayAssignment(models.Model):
         related_name="previous_assignments",
     )
     notes = models.TextField(blank=True)
+    start_date_is_estimated = models.BooleanField(
+        default=False,
+        help_text="True when start_date came from bootstrap cutover/default and still needs review.",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

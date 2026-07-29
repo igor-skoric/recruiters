@@ -411,9 +411,8 @@ class TruckCreateForm(forms.ModelForm):
 
     @transaction.atomic
     def save(self, commit=True, updated_by=None):
+        # current_driver is relay-owned cache; truck forms never write it.
         truck = super().save(commit=False)
-        if "resolved_current_driver" in self.cleaned_data:
-            truck.current_driver = self.cleaned_data.get("resolved_current_driver")
         if commit:
             truck.save()
         return truck

@@ -1,4 +1,9 @@
-"""Import drivers and trucks from CSV or Excel spreadsheets."""
+"""
+Legacy / admin fallback: import drivers and trucks from CSV or Excel.
+
+Prefer Pro Transport master sync + bootstrap_protransport_assignments.
+Assignment bootstrap rules match PT bootstrap (via relay_service.create_assignment).
+"""
 
 from __future__ import annotations
 
@@ -18,6 +23,7 @@ from django.utils.dateparse import parse_date
 from drivers.models import Driver, DriverStatus, DriverType
 from relay.models import AssignmentStatus, RelayAssignment
 from relay.services import relay_service
+from sync.services.bootstrap import ESTIMATED_START_NOTE
 from trucks.models import Truck, TruckStatus
 
 MAX_IMPORT_ROWS = 2000
@@ -313,9 +319,9 @@ def import_trucks(
             unit = data["unit_number"]
             driver_ref = data.pop("_link_driver_id", None)
             with transaction.atomic():
-                current_driver = None
+                link_driver = None
                 if driver_ref:
-                    current_driver = _resolve_driver_by_driver_id(driver_ref)
+                    link_driver = _resolve_driver_by_driver_id(driver_ref)
                 existing = Truck.objects.filter(unit_number__iexact=unit).first()
                 if existing:
                     for key, value in data.items():
@@ -323,20 +329,15 @@ def import_trucks(
                             existing.unit_number = unit
                             continue
                         setattr(existing, key, value)
-                    if driver_ref:
-                        existing.current_driver = current_driver
                     existing.save()
                     truck = existing
                     result.updated += 1
                 else:
-                    truck = Truck.objects.create(
-                        **data,
-                        current_driver=current_driver,
-                    )
+                    truck = Truck.objects.create(**data)
                     result.created += 1
 
-                if create_initial_assignments and current_driver is not None:
-                    if _ensure_initial_assignment(truck, current_driver):
+                if create_initial_assignments and link_driver is not None:
+                    if _ensure_initial_assignment(truck, link_driver):
                         result.assignments_created += 1
         except Exception as exc:  # noqa: BLE001
             result.skipped += 1
@@ -353,11 +354,10 @@ def _truck_has_open_assignment(truck: Truck) -> bool:
 
 def _ensure_initial_assignment(truck: Truck, driver: Driver) -> bool:
     """
-    Bootstrap an ACTIVE assignment for initial fleet import.
+    Legacy Excel bootstrap — same path as PT bootstrap (relay_service).
 
-    Start date is 2 weeks before today so the truck appears mid-cycle
-    (default 4-week OTR → home time ~2 weeks ahead). Skips if an open
-    assignment already exists — safe for re-import.
+    Uses lookback start with an explicit estimated-date note so UI can correct it.
+    Skips if open ACTIVE/PLANNED planning already exists.
     """
     if _truck_has_open_assignment(truck):
         return False
@@ -369,7 +369,8 @@ def _ensure_initial_assignment(truck: Truck, driver: Driver) -> bool:
         truck=truck,
         start_date=start_date,
         status=AssignmentStatus.ACTIVE,
-        notes="Initial assignment from truck import",
+        notes=ESTIMATED_START_NOTE + " (legacy Excel import)",
+        start_date_is_estimated=True,
     )
     return True
 

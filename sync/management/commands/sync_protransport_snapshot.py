@@ -1,29 +1,33 @@
-from django.core.management.base import BaseCommand
+from django.core.exceptions import ImproperlyConfigured
+from django.core.management.base import BaseCommand, CommandError
 
-from sync.services.pro_transport_import import sync_snapshot
+from sync.services.master_sync import sync_master
 
 
 class Command(BaseCommand):
-    help = "Sync drivers and trucks snapshot from Pro Transport (placeholder)."
+    help = (
+        "Deprecated alias for sync_protransport_master. "
+        "Use sync_protransport_master going forward."
+    )
 
     def handle(self, *args, **options):
-        self.stdout.write("Starting Pro Transport snapshot sync...")
         self.stdout.write(
             self.style.WARNING(
-                "Placeholder only — implement pro_transport_import.sync_snapshot() "
-                "when Pro Transport DB connection is configured."
+                "sync_protransport_snapshot is deprecated; "
+                "delegating to sync_protransport_master."
             )
         )
-
-        result = sync_snapshot()
+        try:
+            result = sync_master()
+        except ImproperlyConfigured as exc:
+            raise CommandError(str(exc)) from exc
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Sync finished. Drivers: +{result.drivers_created} / ~{result.drivers_updated}, "
-                f"Trucks: +{result.trucks_created} / ~{result.trucks_updated}, "
-                f"Driver links: {result.assignments_linked}."
+                f"Sync finished. Drivers: +{result.drivers_created} / "
+                f"~{result.drivers_updated}, "
+                f"Trucks: +{result.trucks_created} / ~{result.trucks_updated}."
             )
         )
-        self.stdout.write(
-            "After real sync, open / to review the fleet and correct missing dates per truck."
-        )
+        if result.errors:
+            raise CommandError("Pro Transport sync completed with row errors.")

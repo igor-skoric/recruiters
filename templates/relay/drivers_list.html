@@ -27,16 +27,25 @@
                     type="search"
                     name="q"
                     value="{{ filters.q }}"
-                    placeholder="Search name, Driver ID, phone, email…"
+                    placeholder="Search name, division, phone, email…"
                 >
             </div>
             <div class="list-filter-field">
-                <label class="sr-only" for="driver-status">Status</label>
+                <label class="sr-only" for="driver-status">Operational status</label>
                 <select id="driver-status" class="form-control" name="status" onchange="this.form.requestSubmit()">
-                    <option value="">Status: Active roster</option>
-                    <option value="all"{% if filters.status == "all" %} selected{% endif %}>All statuses</option>
+                    <option value="">Ops: Active roster</option>
+                    <option value="all"{% if filters.status == "all" %} selected{% endif %}>Ops: All</option>
                     {% for value, label in status_choices %}
-                        <option value="{{ value }}"{% if filters.status == value %} selected{% endif %}>{{ label }}</option>
+                        <option value="{{ value }}"{% if filters.status == value %} selected{% endif %}>Ops: {{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="list-filter-field">
+                <label class="sr-only" for="driver-employment">Employment status</label>
+                <select id="driver-employment" class="form-control" name="employment" onchange="this.form.requestSubmit()">
+                    <option value="">Employment: All</option>
+                    {% for value, label in employment_choices %}
+                        <option value="{{ value }}"{% if filters.employment == value %} selected{% endif %}>Employment: {{ label }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -66,7 +75,7 @@
                     <thead>
                         <tr>
                             <th>Name</th>
-                            <th>Driver ID</th>
+                            <th>Division</th>
                             <th>Status</th>
                             <th>Type</th>
                             <th>Phone</th>
@@ -82,7 +91,7 @@
                                         <strong>{{ driver.full_name }}</strong>
                                     </a>
                                 </td>
-                                <td>{% if driver.driver_id %}{{ driver.driver_id }}{% else %}—{% endif %}</td>
+                                <td>{% if driver.division %}{{ driver.division.name }}{% else %}—{% endif %}</td>
                                 <td>{{ driver.get_status_display }}</td>
                                 <td>{{ driver.get_driver_type_display }}</td>
                                 <td>{% if driver.phone %}{{ driver.phone }}{% else %}—{% endif %}</td>

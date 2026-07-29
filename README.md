@@ -100,11 +100,61 @@ Postgres tek kad imaš pravu bazu + `pip install -r requirements.txt`.
 
 Web app (Passenger/WSGI) koristi `config.settings.production` — učitava `.env.production`.  
 Posle izmene env fajla: **Restart** Python app u cPanelu.
-Opciono (cron):
+Opciono (cron) — relay state + periodični Pro Transport master sync.
+Koristi `flock` da paralelni cron jobovi ne trče istovremeno:
 
 ```bash
-python manage.py process_relay_state
+# Relay handoffs (scheduler only — NOT on page GET)
+*/15 * * * * flock -n /var/lock/recruiters_process_relay_state.lock \
+  bash -lc 'cd /path/to/recruiters && DJANGO_SETTINGS_MODULE=config.settings.production \
+  /path/to/.venv/bin/python manage.py process_relay_state'
+
+# Master data from Pro Transport
+*/30 * * * * flock -n /var/lock/recruiters_sync_protransport_master.lock \
+  bash -lc 'cd /path/to/recruiters && DJANGO_SETTINGS_MODULE=config.settings.production \
+  /path/to/.venv/bin/python manage.py sync_protransport_master'
+
+# Optional nightly integrity report (read-only)
+# 15 3 * * * flock -n /var/lock/recruiters_audit_fleet.lock \
+#   bash -lc 'cd /path/to/recruiters && DJANGO_SETTINGS_MODULE=config.settings.production \
+#   /path/to/.venv/bin/python manage.py audit_fleet_integrity'
 ```
+
+Jednokratni bootstrap assignment-a (ručno, sa potvrdom):
+
+```bash
+# Preview
+python manage.py sync_protransport_master --dry-run
+python manage.py bootstrap_protransport_assignments --dry-run --default-start-date=2026-07-01
+
+# Write
+python manage.py sync_protransport_master
+python manage.py bootstrap_protransport_assignments --confirm --default-start-date=2026-07-01
+python manage.py audit_fleet_integrity
+```
+
+U `.env.production` (nije u Gitu) popuni read-only pristup PT bazi:
+
+```
+PRO_TRANSPORT_DB_HOST=...
+PRO_TRANSPORT_DB_NAME=...
+PRO_TRANSPORT_DB_USER=...
+PRO_TRANSPORT_DB_PASSWORD=...
+PRO_TRANSPORT_DB_PORT=5432
+# Opciono cutover datum za bootstrap:
+# PRO_TRANSPORT_BOOTSTRAP_DEFAULT_START_DATE=2026-07-01
+```
+
+**Master sync** ažurira companies (`company_data`), pa drivers/trucks po stabilnim PT ID-jevima
+(`driver_id` / `protransport_id`) i vezuje `division` preko PT `division_id`.
+**Novi vozači** se kreiraju samo ako su PT employment `ACTIVE` i company driver
+(`IMPORT_EMPLOYMENT_STATUSES` / `IMPORT_DRIVER_TYPES` u `sync/services/master_sync.py` —
+lako proširiti kasnije). Već postojeći vozači se i dalje ažuriraju (npr. terminated).
+**Ne dira** `RelayAssignment`, `DriverStatusPeriod`, `Truck.current_driver`, ni lokalni
+operational status (`otr` / `yard` / `home_time`). Excel import je legacy fallback.
+
+`Driver.driver_id` = Pro Transport `drivers.id` (stabilni ključ; nije preimenovan zbog kompatibilnosti).
+`Truck.protransport_id` = Pro Transport `trucks.id`.
 
 ## Settings
 
@@ -126,9 +176,17 @@ python manage.py seed_departments_roles
 python manage.py create_it_admin --email admin@example.com --full-name "IT Admin" --password "your-password"
 python manage.py collectstatic --noinput
 python manage.py process_relay_state
+python manage.py sync_protransport_master
+python manage.py sync_protransport_master --dry-run
+python manage.py bootstrap_protransport_assignments --dry-run --default-start-date=YYYY-MM-DD
+python manage.py rebuild_current_driver_cache
+python manage.py audit_fleet_integrity
 python manage.py runserver
 ```
 
 ## Napomena
 
-Pro Transport sync još nije live (`sync_protransport_snapshot` = placeholder). Driveri i truckovi se unose ručno.
+Pro Transport: `sync_protransport_master` (periodično) + `bootstrap_protransport_assignments`
+(jednom). Excel import je legacy fallback. Bootstrap match isključivo po PT ID-jevima
+(`driver_id` / `protransport_id`). Estimated start dates imaju `start_date_is_estimated`
+i čiste se kad korisnik ručno izmeni datume u UI.

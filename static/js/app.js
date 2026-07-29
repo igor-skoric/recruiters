@@ -542,13 +542,14 @@
         });
     }
 
-    // Fleet board live search (truck / current driver / next driver)
+    // Fleet board live search (truck / current driver / next driver) — current page only
     const fleetSearch = document.querySelector("[data-fleet-search]");
     if (fleetSearch) {
         const rows = Array.from(document.querySelectorAll("[data-fleet-row]"));
         const emptyEl = document.querySelector("[data-fleet-search-empty]");
         const visibleCountEl = document.querySelector("[data-fleet-visible-count]");
         const scrollEl = document.querySelector(".fleet-scroll");
+        const defaultVisibleLabel = visibleCountEl ? visibleCountEl.textContent : "";
 
         function applyFleetSearch() {
             const query = fleetSearch.value.trim().toLowerCase();
@@ -562,7 +563,7 @@
                 }
             });
             if (visibleCountEl) {
-                visibleCountEl.textContent = String(visible);
+                visibleCountEl.textContent = query ? String(visible) : defaultVisibleLabel;
             }
             if (emptyEl) {
                 emptyEl.hidden = visible > 0 || rows.length === 0;

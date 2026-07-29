@@ -8,18 +8,24 @@
     <header class="td-header">
         <div class="td-header-main">
             <div class="td-title-row">
+                <span class="entity-title-icon entity-title-icon-truck" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17h4V5H2v12h3"/><path d="M14 17h5l3-5v-2h-8v7z"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+                </span>
                 <h1>Truck {{ truck.unit_number }}</h1>
                 <span class="badge badge-truck-{{ row.truck_status }}">{{ row.truck_status_label }}</span>
                 {% planning_badge row %}
             </div>
             <p class="td-header-meta">
+                {% if truck.division %}
+                    <span class="td-division">{{ truck.division.name }}</span>
+                {% endif %}
                 {% if truck.make or truck.model %}
-                    {{ truck.make }} {{ truck.model }}{% if truck.year %} · {{ truck.year }}{% endif %}
+                    {% if truck.division %} · {% endif %}{{ truck.make }} {{ truck.model }}{% if truck.year %} · {{ truck.year }}{% endif %}
                 {% endif %}
                 {% if truck.vin %}
-                    {% if truck.make or truck.model %} · {% endif %}VIN {{ truck.vin }}
+                    {% if truck.division or truck.make or truck.model %} · {% endif %}VIN {{ truck.vin }}
                 {% endif %}
-                {% if not truck.make and not truck.model and not truck.vin %}
+                {% if not truck.division and not truck.make and not truck.model and not truck.vin %}
                     <span class="text-muted">No vehicle details on file</span>
                 {% endif %}
             </p>
@@ -40,29 +46,78 @@
         </div>
     </header>
 
-    <section class="td-summary-grid" aria-label="Truck summary">
-        {% if current_assignment %}
-            {% include "relay/components/_assignment_summary_card.html" with label="Current Driver" value=current_assignment.driver.full_name secondary=current_assignment.driver.driver_id tone="current-driver" %}
-            {% include "relay/components/_assignment_summary_card.html" with label="Current Assignment" value=current_cycle_duration secondary=current_assignment.start_date|date:"M j" tone="current-assignment" %}
-        {% else %}
-            {% include "relay/components/_assignment_summary_card.html" with label="Current Driver" value="—" muted=1 tone="current-driver" %}
-            {% include "relay/components/_assignment_summary_card.html" with label="Current Assignment" value="No active assignment" muted=1 tone="current-assignment" %}
-        {% endif %}
-
-        {% if next_assignment %}
-            {% include "relay/components/_assignment_summary_card.html" with label="Next Driver" value=next_assignment.driver.full_name secondary=next_assignment.get_status_display tone="next-driver" %}
-            {% include "relay/components/_assignment_summary_card.html" with label="Next Assignment" value=next_cycle_duration secondary=next_assignment.start_date|date:"M j" tone="next-assignment" %}
-        {% else %}
-            {% include "relay/components/_assignment_summary_card.html" with label="Next Driver" value="—" muted=1 tone="next-driver" %}
-            {% include "relay/components/_assignment_summary_card.html" with label="Next Assignment" value="Not planned" muted=1 tone="next-assignment" %}
-        {% endif %}
-
-        {% include "relay/components/_assignment_summary_card.html" with label="Truck Status" value=row.truck_status_label secondary=row.planning_status_label tone="truck-status" %}
-        {% if row.days_left != None %}
-            {% include "relay/components/_assignment_summary_card.html" with label="Days Remaining" value=row.days_left secondary="Until return home" tone="days" %}
-        {% else %}
-            {% include "relay/components/_assignment_summary_card.html" with label="Days Remaining" value="—" muted=1 tone="days" %}
-        {% endif %}
+    <section class="card td-summary" aria-label="Truck summary">
+        <dl class="td-summary-facts">
+            <div>
+                <dt>Division</dt>
+                {% if truck.division %}
+                    <dd>{{ truck.division.name }}</dd>
+                    {% if truck.division.mc %}<dd class="td-summary-secondary">MC {{ truck.division.mc }}</dd>{% endif %}
+                {% else %}
+                    <dd class="is-muted">—</dd>
+                {% endif %}
+            </div>
+            <div>
+                <dt>Current Driver</dt>
+                {% if current_assignment %}
+                    <dd>
+                        <a href="{% url 'relay:driver_detail' current_assignment.driver.pk %}">
+                            {{ current_assignment.driver.full_name }}
+                        </a>
+                    </dd>
+                    {% if current_assignment.driver.driver_id %}
+                        <dd class="td-summary-secondary">ID {{ current_assignment.driver.driver_id }}</dd>
+                    {% endif %}
+                {% else %}
+                    <dd class="is-muted">—</dd>
+                {% endif %}
+            </div>
+            <div>
+                <dt>Current Assignment</dt>
+                {% if current_assignment %}
+                    <dd>{{ current_cycle_duration }}</dd>
+                    <dd class="td-summary-secondary">Started {{ current_assignment.start_date|date:"M j" }}</dd>
+                {% else %}
+                    <dd class="is-muted">No active assignment</dd>
+                {% endif %}
+            </div>
+            <div>
+                <dt>Next Driver</dt>
+                {% if next_assignment %}
+                    <dd>
+                        <a href="{% url 'relay:driver_detail' next_assignment.driver.pk %}">
+                            {{ next_assignment.driver.full_name }}
+                        </a>
+                    </dd>
+                    <dd class="td-summary-secondary">{{ next_assignment.get_status_display }}</dd>
+                {% else %}
+                    <dd class="is-muted">—</dd>
+                {% endif %}
+            </div>
+            <div>
+                <dt>Next Assignment</dt>
+                {% if next_assignment %}
+                    <dd>{{ next_cycle_duration }}</dd>
+                    <dd class="td-summary-secondary">Starts {{ next_assignment.start_date|date:"M j" }}</dd>
+                {% else %}
+                    <dd class="is-muted">Not planned</dd>
+                {% endif %}
+            </div>
+            <div>
+                <dt>Truck Status</dt>
+                <dd>{{ row.truck_status_label }}</dd>
+                <dd class="td-summary-secondary">{{ row.planning_status_label }}</dd>
+            </div>
+            <div>
+                <dt>Days Remaining</dt>
+                {% if row.days_left != None %}
+                    <dd>{{ row.days_left }}</dd>
+                    <dd class="td-summary-secondary">Until return home</dd>
+                {% else %}
+                    <dd class="is-muted">—</dd>
+                {% endif %}
+            </div>
+        </dl>
     </section>
 
     {% include "relay/components/_assignment_timeline.html" %}

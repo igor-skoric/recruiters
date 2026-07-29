@@ -27,7 +27,7 @@
                     type="search"
                     name="q"
                     value="{{ filters.q }}"
-                    placeholder="Search unit, VIN, make, model, driver…"
+                    placeholder="Search unit, VIN, make, model, driver, division…"
                 >
             </div>
             <div class="list-filter-field">
@@ -64,6 +64,7 @@
                     <thead>
                         <tr>
                             <th>Unit</th>
+                            <th>Division</th>
                             <th>Status</th>
                             <th>Current driver</th>
                             <th>Make / Model</th>
@@ -78,6 +79,7 @@
                                         <strong>{{ truck.unit_number }}</strong>
                                     </a>
                                 </td>
+                                <td>{% if truck.division %}{{ truck.division.name }}{% else %}—{% endif %}</td>
                                 <td>{{ truck.get_status_display }}</td>
                                 <td>
                                     {% if truck.current_driver %}
