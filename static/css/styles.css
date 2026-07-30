@@ -407,6 +407,12 @@ a:hover {
     border-color: #a7f3d0;
 }
 
+.status-occupied {
+    background: #fef2f2;
+    color: #b91c1c;
+    border-color: #fecaca;
+}
+
 .status-needs {
     background: #fffbeb;
     color: #b45309;
@@ -3626,6 +3632,12 @@ a:hover {
     background: var(--td-success-soft);
     color: #047857;
     border-color: #bbf7d0;
+}
+
+.td-page .status-occupied {
+    background: var(--td-danger-soft, #fef2f2);
+    color: #b91c1c;
+    border-color: #fecaca;
 }
 
 .td-page .badge-status-cancelled {

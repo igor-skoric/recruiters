@@ -110,6 +110,8 @@ TRUCKS_SQL = """
     FROM trucks
     ORDER BY id
 """
+# Note: no WHERE here — rows are filtered on create via truck_allowed_for_import
+# (source_is_active / total-loss). Existing local trucks are still updated.
 
 
 @dataclass

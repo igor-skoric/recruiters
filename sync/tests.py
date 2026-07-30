@@ -245,6 +245,69 @@ class MasterSyncUpsertTests(TestCase):
         self.assertEqual(truck.unit_number, "NEW-1")
         self.assertEqual(truck.make, "FRHT")
 
+    def test_upsert_trucks_skips_inactive_on_create(self):
+        result = master_sync.upsert_trucks_from_rows(
+            [
+                {
+                    "id": "90",
+                    "unit_no": "DEAD-1",
+                    "make": "OLD",
+                    "model": "X",
+                    "year_of_truck": None,
+                    "is_active": False,
+                    "status": "INACTIVE",
+                },
+                {
+                    "id": "91",
+                    "unit_no": "LOSS-1",
+                    "make": "OLD",
+                    "model": "Y",
+                    "year_of_truck": None,
+                    "is_active": True,
+                    "status": "total loss",
+                },
+                {
+                    "id": "92",
+                    "unit_no": "OK-1",
+                    "make": "VOLVO",
+                    "model": "VNL",
+                    "year_of_truck": "2020-01-01",
+                    "is_active": True,
+                    "status": "ACTIVE",
+                },
+            ]
+        )
+        self.assertEqual(result.created, 1)
+        self.assertEqual(result.skipped, 2)
+        self.assertTrue(Truck.objects.filter(protransport_id="92").exists())
+        self.assertFalse(Truck.objects.filter(protransport_id="90").exists())
+        self.assertFalse(Truck.objects.filter(protransport_id="91").exists())
+
+    def test_upsert_trucks_still_updates_existing_inactive(self):
+        Truck.objects.create(
+            protransport_id="93",
+            unit_number="WAS-OK",
+            source_is_active=True,
+        )
+        result = master_sync.upsert_trucks_from_rows(
+            [
+                {
+                    "id": "93",
+                    "unit_no": "WAS-OK",
+                    "make": "FRHT",
+                    "model": "X",
+                    "year_of_truck": None,
+                    "is_active": False,
+                    "status": "INACTIVE",
+                }
+            ]
+        )
+        self.assertEqual(result.updated, 1)
+        self.assertEqual(result.skipped, 0)
+        truck = Truck.objects.get(protransport_id="93")
+        self.assertFalse(truck.source_is_active)
+        self.assertEqual(truck.make, "FRHT")
+
     def test_master_sync_does_not_touch_planning(self):
         driver = Driver.objects.create(
             driver_id="100",

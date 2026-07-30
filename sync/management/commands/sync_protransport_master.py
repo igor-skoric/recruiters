@@ -7,8 +7,8 @@ from sync.services.master_sync import sync_master
 class Command(BaseCommand):
     help = (
         "Periodic Pro Transport master sync (drivers/trucks only). "
-        "New drivers: only ACTIVE company drivers "
-        "(see IMPORT_EMPLOYMENT_STATUSES / IMPORT_DRIVER_TYPES). "
+        "New drivers: only ACTIVE company drivers; "
+        "new trucks: only PT-active (see IMPORT_* allowlists). "
         "Does not touch RelayAssignment, DriverStatusPeriod, or current_driver."
     )
 

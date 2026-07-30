@@ -24,23 +24,32 @@ def kpi_cycles_ending_soon(fleet_items, days: int = 7) -> int:
 
 @register.inclusion_tag("relay/partials/_planning_badge.html")
 def planning_badge(row):
-    """Map existing review_status to Ready / Needs Planning / Conflict / Inactive."""
+    """
+    Planning column: Occupied / Available / Needs planning / Unavailable.
+
+    Aligned with the fleet timeline legend — not raw Truck.status.
+    """
     status = row.review_status
     truck_status = row.truck_status
+    has_driver = bool(getattr(row, "current_driver", None))
 
     if truck_status in {"maintenance", "inactive"} or status == "maintenance":
-        return {"tone": "inactive", "label": "Inactive"}
-    if status == "ok" or status == "in_yard":
-        return {"tone": "ready", "label": "Ready"}
+        return {"tone": "inactive", "label": "Unavailable"}
+
     if status in {
         "needs_relay_planning",
         "missing_cycle_start_date",
         "missing_current_driver",
     }:
-        return {"tone": "needs", "label": "Needs Planning"}
-    if row.needs_review:
-        return {"tone": "needs", "label": "Needs Planning"}
-    return {"tone": "inactive", "label": "Inactive"}
+        return {"tone": "needs", "label": "Needs planning"}
+
+    if has_driver and status == "ok":
+        return {"tone": "occupied", "label": "Occupied"}
+
+    if status == "in_yard" or not has_driver:
+        return {"tone": "ready", "label": "Available"}
+
+    return {"tone": "inactive", "label": "Unavailable"}
 
 
 @register.filter

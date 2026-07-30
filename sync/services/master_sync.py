@@ -43,6 +43,10 @@ _INACTIVE_EMPLOYMENT = frozenset(
 IMPORT_EMPLOYMENT_STATUSES = frozenset({EmploymentStatus.ACTIVE})
 IMPORT_DRIVER_TYPES = frozenset({DriverType.COMPANY_DRIVER})
 
+# Truck create allowlist — only PT-active trucks (not is_active=false / total loss).
+# Existing trucks are still updated so source_is_active stays accurate.
+IMPORT_TRUCKS_REQUIRE_SOURCE_ACTIVE = True
+
 
 def driver_allowed_for_import(
     *,
@@ -54,6 +58,13 @@ def driver_allowed_for_import(
         employment_status in IMPORT_EMPLOYMENT_STATUSES
         and driver_type in IMPORT_DRIVER_TYPES
     )
+
+
+def truck_allowed_for_import(*, source_is_active: bool | None) -> bool:
+    """Return True if a PT truck row may create a new local Truck."""
+    if not IMPORT_TRUCKS_REQUIRE_SOURCE_ACTIVE:
+        return True
+    return source_is_active is True
 
 
 def _apply_fields(instance: Any, data: dict[str, Any], allowed: frozenset[str]) -> list[str]:
@@ -303,6 +314,11 @@ def upsert_trucks_from_rows(
                 division_pt_id=division_pt_id,
             )
             existing, linked = _find_truck_for_upsert(data)
+            if existing is None and not truck_allowed_for_import(
+                source_is_active=data["source_is_active"]
+            ):
+                counts.skipped += 1
+                continue
             if existing:
                 would_change = [
                     key
