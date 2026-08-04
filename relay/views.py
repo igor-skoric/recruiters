@@ -794,8 +794,15 @@ def _driver_list_filters(request) -> dict:
         )
         employment = ""
 
+    # Owner operators are out of Fleet Planner scope — never list them.
+    queryset = queryset.exclude(driver_type=DriverType.OWNER_OPERATOR)
+
     if driver_type and driver_type in DriverType.values:
-        queryset = queryset.filter(driver_type=driver_type)
+        if driver_type == DriverType.OWNER_OPERATOR:
+            # Explicit OO filter still yields empty — they must not appear.
+            queryset = queryset.none()
+        else:
+            queryset = queryset.filter(driver_type=driver_type)
     else:
         driver_type = ""
 

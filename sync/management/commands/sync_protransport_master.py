@@ -8,8 +8,10 @@ class Command(BaseCommand):
     help = (
         "Periodic Pro Transport master sync (drivers/trucks only). "
         "New drivers: ACTIVE + is_active + company driver; "
+        "owner operators are removed from the app; "
         "new trucks: only PT-active (see IMPORT_* allowlists). "
-        "Does not touch RelayAssignment, DriverStatusPeriod, or current_driver."
+        "Does not touch RelayAssignment lifecycle except when removing "
+        "out-of-scope drivers."
     )
 
     def add_arguments(self, parser):
@@ -36,7 +38,8 @@ class Command(BaseCommand):
                 f"={result.companies_unchanged} skip {result.companies_skipped}; "
                 "Drivers: "
                 f"+{result.drivers_created} ~{result.drivers_updated} "
-                f"={result.drivers_unchanged} skip {result.drivers_skipped}; "
+                f"={result.drivers_unchanged} skip {result.drivers_skipped} "
+                f"removed {result.drivers_removed}; "
                 "Trucks: "
                 f"+{result.trucks_created} ~{result.trucks_updated} "
                 f"={result.trucks_unchanged} skip {result.trucks_skipped} "

@@ -99,10 +99,11 @@ class Driver(models.Model):
     @classmethod
     def on_roster(cls):
         """
-        Soft PT roster: exclude terminated/inactive employment.
+        Soft PT roster: exclude terminated/inactive employment and owner operators.
 
-        Rows stay in the DB; they are hidden from default lists and pickers.
+        Rows with inactive employment stay in the DB (hidden from default lists).
+        Owner operators are out of Fleet Planner scope entirely.
         """
         return cls.objects.exclude(
             employment_status__in=INACTIVE_EMPLOYMENT_STATUSES
-        )
+        ).exclude(driver_type=DriverType.OWNER_OPERATOR)

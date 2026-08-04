@@ -156,6 +156,8 @@ employment ostaju u bazi, ali su van default Drivers liste i assignment pickera
 Kad PT employment postane `TERMINATED`/`INACTIVE` (uključujući `is_active=false`),
 sync postavlja i lokalni ops `Driver.status` na terminated/inactive.
 Novi PT-active driveri se kreiraju kao ops Active.
+Ako PT promeni vozača u **owner operator**, lokalni zapis se **briše** (nije u
+Fleet Planner scope); preostali lokalni OO se takođe čiste na syncu.
 **Ne dira** `RelayAssignment`, `DriverStatusPeriod`, `Truck.current_driver`, ni lokalni
 operational status (`otr` / `yard` / `home_time`). Excel import je legacy fallback.
 

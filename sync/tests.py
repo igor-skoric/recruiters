@@ -302,7 +302,49 @@ class MasterSyncUpsertTests(TestCase):
         self.assertEqual(driver.employment_status, EmploymentStatus.TERMINATED)
         self.assertEqual(driver.status, DriverStatus.TERMINATED)
 
-    def test_upsert_drivers_create_sets_ops_active(self):
+    def test_upsert_drivers_removes_when_becomes_owner_operator(self):
+        Driver.objects.create(
+            driver_id="400",
+            first_name="Was",
+            last_name="Company",
+            employment_status=EmploymentStatus.ACTIVE,
+            status=DriverStatus.ACTIVE,
+            driver_type=DriverType.COMPANY_DRIVER,
+        )
+        result = master_sync.upsert_drivers_from_rows(
+            [
+                {
+                    "id": "400",
+                    "first_name": "Was",
+                    "last_name": "Company",
+                    "phone_cell": "",
+                    "phone_home": "",
+                    "email": "",
+                    "hire_date": None,
+                    "status": "ACTIVE",
+                    "is_active": True,
+                    "is_company_driver": False,
+                }
+            ]
+        )
+        self.assertEqual(result.removed, 1)
+        self.assertFalse(Driver.objects.filter(driver_id="400").exists())
+
+    def test_sync_drivers_purges_local_owner_operators(self):
+        Driver.objects.create(
+            driver_id="401",
+            first_name="Local",
+            last_name="OO",
+            driver_type=DriverType.OWNER_OPERATOR,
+            employment_status=EmploymentStatus.ACTIVE,
+        )
+        with patch(
+            "sync.services.master_sync.fetch_pt_rows",
+            return_value=[],
+        ):
+            result = master_sync.sync_drivers(dry_run=False)
+        self.assertEqual(result.removed, 1)
+        self.assertFalse(Driver.objects.filter(driver_id="401").exists())
         result = master_sync.upsert_drivers_from_rows(
             [
                 {

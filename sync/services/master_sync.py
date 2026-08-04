@@ -87,6 +87,46 @@ def ops_status_from_employment(employment_status: str) -> str | None:
     return None
 
 
+def driver_out_of_scope_for_app(*, driver_type: str) -> bool:
+    """Owner operators are not Fleet Planner drivers — remove locally if present."""
+    return driver_type not in IMPORT_DRIVER_TYPES
+
+
+def _remove_out_of_scope_driver(driver: Driver, counts: SyncCounts) -> None:
+    """
+    Delete a local driver that left company-driver scope (e.g. became owner operator).
+
+    Clears truck cache and assignments first (RelayAssignment.driver is PROTECT).
+    """
+    open_planning = RelayAssignment.objects.filter(
+        driver=driver,
+        status__in={AssignmentStatus.ACTIVE, AssignmentStatus.PLANNED},
+    ).count()
+    if open_planning:
+        counts.warnings.append(
+            f"driver_id={driver.driver_id}: removing owner-operator / out-of-scope "
+            f"driver with {open_planning} ACTIVE/PLANNED assignment(s)"
+        )
+    Truck.objects.filter(current_driver=driver).update(current_driver=None)
+    RelayAssignment.objects.filter(driver=driver).delete()
+    driver.delete()
+    counts.removed += 1
+
+
+def _purge_local_owner_operators(*, dry_run: bool, counts: SyncCounts) -> None:
+    """Remove any remaining local owner operators (not in Fleet Planner scope)."""
+    qs = Driver.objects.filter(driver_type=DriverType.OWNER_OPERATOR)
+    for driver in qs.iterator():
+        if dry_run:
+            counts.removed += 1
+            counts.warnings.append(
+                f"driver_id={driver.driver_id}: would remove local owner operator"
+            )
+            continue
+        with transaction.atomic():
+            _remove_out_of_scope_driver(driver, counts)
+
+
 def _apply_fields(instance: Any, data: dict[str, Any], allowed: frozenset[str]) -> list[str]:
     changed: list[str] = []
     for key in allowed:
@@ -234,6 +274,20 @@ def upsert_drivers_from_rows(
             )
             if existing is None and not allowed:
                 counts.skipped += 1
+                continue
+            # Company → owner operator (or otherwise out of scope): delete local row.
+            if existing is not None and driver_out_of_scope_for_app(
+                driver_type=data["driver_type"]
+            ):
+                if dry_run:
+                    counts.removed += 1
+                    counts.warnings.append(
+                        f"driver_id={data['driver_id']}: would remove "
+                        f"(PT type={data['driver_type']})"
+                    )
+                    continue
+                with transaction.atomic():
+                    _remove_out_of_scope_driver(existing, counts)
                 continue
             forced_ops = ops_status_from_employment(data["employment_status"])
             if existing:
@@ -411,7 +465,9 @@ def sync_companies(*, dry_run: bool = False) -> SyncCounts:
 
 
 def sync_drivers(*, dry_run: bool = False) -> SyncCounts:
-    return upsert_drivers_from_rows(fetch_pt_rows(DRIVERS_SQL), dry_run=dry_run)
+    counts = upsert_drivers_from_rows(fetch_pt_rows(DRIVERS_SQL), dry_run=dry_run)
+    _purge_local_owner_operators(dry_run=dry_run, counts=counts)
+    return counts
 
 
 def sync_trucks(*, dry_run: bool = False) -> SyncCounts:
@@ -433,6 +489,7 @@ def sync_master(*, dry_run: bool = False) -> ImportResult:
         drivers_updated=drivers.updated,
         drivers_unchanged=drivers.unchanged,
         drivers_skipped=drivers.skipped,
+        drivers_removed=drivers.removed,
         trucks_created=trucks.created,
         trucks_updated=trucks.updated,
         trucks_unchanged=trucks.unchanged,

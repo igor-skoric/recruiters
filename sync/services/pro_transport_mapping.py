@@ -125,6 +125,7 @@ class SyncCounts:
     updated: int = 0
     unchanged: int = 0
     skipped: int = 0
+    removed: int = 0
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     # One-time link when local truck had unit_number but null protransport_id.
@@ -143,6 +144,7 @@ class ImportResult:
     drivers_created: int = 0
     drivers_updated: int = 0
     drivers_skipped: int = 0
+    drivers_removed: int = 0
     trucks_created: int = 0
     trucks_updated: int = 0
     trucks_skipped: int = 0
