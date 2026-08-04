@@ -44,8 +44,8 @@ from trucks.models import Truck
 _INACTIVE_EMPLOYMENT = INACTIVE_EMPLOYMENT_STATUSES
 
 # Driver create allowlist for master sync — widen these later if needed.
-# Existing drivers (already linked by driver_id) are still updated so PT
-# employment/type stay accurate even when they fall outside the allowlist.
+# Effective employment already folds PT drivers.is_active into employment_status
+# (see apply_driver_is_active_to_employment). Existing drivers are still updated.
 IMPORT_EMPLOYMENT_STATUSES = frozenset({EmploymentStatus.ACTIVE})
 IMPORT_DRIVER_TYPES = frozenset({DriverType.COMPANY_DRIVER})
 

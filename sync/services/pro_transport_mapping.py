@@ -92,11 +92,14 @@ DRIVERS_SQL = """
         email,
         hire_date,
         status,
+        is_active,
         is_company_driver,
         division_id
     FROM drivers
     ORDER BY id
 """
+# Note: no WHERE — create/update filters use status + is_active + is_company_driver
+# in map_driver_master_row / driver_allowed_for_import.
 
 TRUCKS_SQL = """
     SELECT
@@ -175,6 +178,31 @@ def map_driver_type(is_company_driver: Any) -> str:
     if is_company_driver is False:
         return DriverType.OWNER_OPERATOR
     return DriverType.COMPANY_DRIVER
+
+
+def map_driver_is_active(is_active: Any) -> bool:
+    """PT drivers.is_active — False means off roster; missing/True counts as active."""
+    if is_active is False:
+        return False
+    return True
+
+
+def apply_driver_is_active_to_employment(
+    employment_status: str,
+    *,
+    is_active: bool,
+) -> str:
+    """
+    Combine PT status + is_active into effective employment.
+
+    If is_active is false, driver leaves the active roster even when status text
+    still says ACTIVE (TERMINATED stays TERMINATED).
+    """
+    if is_active:
+        return employment_status
+    if employment_status == EmploymentStatus.TERMINATED:
+        return EmploymentStatus.TERMINATED
+    return EmploymentStatus.INACTIVE
 
 
 def map_source_is_active(is_active: Any, pt_status: Any) -> bool:
@@ -275,6 +303,10 @@ def map_driver_master_row(row: Mapping[str, Any]) -> dict[str, Any]:
     division_pt_id = None
     if row.get("division_id") is not None and clean_str(row.get("division_id"), 64) != "":
         division_pt_id = clean_str(row.get("division_id"), 64)
+    employment_status = apply_driver_is_active_to_employment(
+        map_employment_status(row.get("status")),
+        is_active=map_driver_is_active(row.get("is_active")),
+    )
     return {
         "driver_id": driver_id,
         "first_name": clean_str(row.get("first_name"), 100) or "Unknown",
@@ -282,7 +314,7 @@ def map_driver_master_row(row: Mapping[str, Any]) -> dict[str, Any]:
         "phone": phone,
         "email": clean_email(row.get("email")),
         "hire_date": extract_date(row.get("hire_date")),
-        "employment_status": map_employment_status(row.get("status")),
+        "employment_status": employment_status,
         "driver_type": map_driver_type(row.get("is_company_driver")),
         "division_pt_id": division_pt_id,
     }

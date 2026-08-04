@@ -23,6 +23,40 @@ class MappingTests(TestCase):
             mapping.map_employment_status("TERMINATED"), EmploymentStatus.TERMINATED
         )
 
+    def test_map_driver_is_active_forces_inactive_employment(self):
+        data = mapping.map_driver_master_row(
+            {
+                "id": "9",
+                "first_name": "Off",
+                "last_name": "Flag",
+                "phone_cell": "",
+                "phone_home": "",
+                "email": "",
+                "hire_date": None,
+                "status": "ACTIVE",
+                "is_active": False,
+                "is_company_driver": True,
+            }
+        )
+        self.assertEqual(data["employment_status"], EmploymentStatus.INACTIVE)
+
+    def test_map_driver_terminated_stays_terminated_when_inactive_flag(self):
+        data = mapping.map_driver_master_row(
+            {
+                "id": "10",
+                "first_name": "Gone",
+                "last_name": "Flag",
+                "phone_cell": "",
+                "phone_home": "",
+                "email": "",
+                "hire_date": None,
+                "status": "TERMINATED",
+                "is_active": False,
+                "is_company_driver": True,
+            }
+        )
+        self.assertEqual(data["employment_status"], EmploymentStatus.TERMINATED)
+
     def test_clean_str_preserves_zero_id(self):
         self.assertEqual(mapping.clean_str(0, 64), "0")
 
@@ -185,15 +219,58 @@ class MasterSyncUpsertTests(TestCase):
                 "status": "ACTIVE",
                 "is_company_driver": True,
             },
+            {
+                "id": "205",
+                "first_name": "Flag",
+                "last_name": "Off",
+                "phone_cell": "",
+                "phone_home": "",
+                "email": "",
+                "hire_date": None,
+                "status": "ACTIVE",
+                "is_active": False,
+                "is_company_driver": True,
+            },
         ]
         result = master_sync.upsert_drivers_from_rows(rows)
         self.assertEqual(result.created, 1)
-        self.assertEqual(result.skipped, 4)
+        self.assertEqual(result.skipped, 5)
         self.assertTrue(Driver.objects.filter(driver_id="204").exists())
         self.assertFalse(Driver.objects.filter(driver_id="200").exists())
         self.assertFalse(Driver.objects.filter(driver_id="201").exists())
         self.assertFalse(Driver.objects.filter(driver_id="202").exists())
         self.assertFalse(Driver.objects.filter(driver_id="203").exists())
+        self.assertFalse(Driver.objects.filter(driver_id="205").exists())
+
+    def test_upsert_drivers_is_active_false_terminates_existing(self):
+        Driver.objects.create(
+            driver_id="206",
+            first_name="Was",
+            last_name="Active",
+            employment_status=EmploymentStatus.ACTIVE,
+            status=DriverStatus.ACTIVE,
+            driver_type=DriverType.COMPANY_DRIVER,
+        )
+        result = master_sync.upsert_drivers_from_rows(
+            [
+                {
+                    "id": "206",
+                    "first_name": "Was",
+                    "last_name": "Active",
+                    "phone_cell": "",
+                    "phone_home": "",
+                    "email": "",
+                    "hire_date": None,
+                    "status": "ACTIVE",
+                    "is_active": False,
+                    "is_company_driver": True,
+                }
+            ]
+        )
+        self.assertEqual(result.updated, 1)
+        driver = Driver.objects.get(driver_id="206")
+        self.assertEqual(driver.employment_status, EmploymentStatus.INACTIVE)
+        self.assertEqual(driver.status, DriverStatus.INACTIVE)
 
     def test_upsert_drivers_still_updates_existing_when_no_longer_allowed(self):
         Driver.objects.create(

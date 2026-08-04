@@ -147,14 +147,15 @@ PRO_TRANSPORT_DB_PORT=5432
 
 **Master sync** ažurira companies (`company_data`), pa drivers/trucks po stabilnim PT ID-jevima
 (`driver_id` / `protransport_id`) i vezuje `division` preko PT `division_id`.
-**Novi vozači** se kreiraju samo ako su PT employment `ACTIVE` i company driver;
-**novi kamioni** samo ako su PT-active (`source_is_active`, ne `total loss`)
+**Novi vozači** se kreiraju samo ako su PT employment `ACTIVE`, `is_active=true`
+i company driver; **novi kamioni** samo ako su PT-active (`source_is_active`, ne `total loss`)
 (`IMPORT_*` allowlists u `sync/services/master_sync.py` — lako proširiti kasnije).
 Već postojeći zapisi se i dalje ažuriraju (bez brisanja). Soft roster: terminated/inactive
 employment ostaju u bazi, ali su van default Drivers liste i assignment pickera
 (`Employment: Active roster`; `Employment: All` ih i dalje pokazuje).
-Kad PT employment postane `TERMINATED`/`INACTIVE`, sync postavlja i lokalni ops
-`Driver.status` na terminated/inactive. Novi PT-active driveri se kreiraju kao ops Active.
+Kad PT employment postane `TERMINATED`/`INACTIVE` (uključujući `is_active=false`),
+sync postavlja i lokalni ops `Driver.status` na terminated/inactive.
+Novi PT-active driveri se kreiraju kao ops Active.
 **Ne dira** `RelayAssignment`, `DriverStatusPeriod`, `Truck.current_driver`, ni lokalni
 operational status (`otr` / `yard` / `home_time`). Excel import je legacy fallback.
 
