@@ -7,14 +7,12 @@ from dataclasses import dataclass, field
 from django.core.management.base import BaseCommand
 from django.db.models import Count
 
-from drivers.models import Driver, EmploymentStatus
+from drivers.models import Driver, EmploymentStatus, INACTIVE_EMPLOYMENT_STATUSES
 from relay.models import AssignmentStatus, RelayAssignment
 from relay.services.relay_service import assignment_period_bounds
 from trucks.models import Truck
 
-_INACTIVE_EMPLOYMENT = frozenset(
-    {EmploymentStatus.TERMINATED, EmploymentStatus.INACTIVE}
-)
+_INACTIVE_EMPLOYMENT = INACTIVE_EMPLOYMENT_STATUSES
 
 
 @dataclass

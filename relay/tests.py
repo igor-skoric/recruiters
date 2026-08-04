@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
-from drivers.models import Driver, DriverStatus
+from drivers.models import Driver, DriverStatus, EmploymentStatus
 from relay.models import (
     AssignmentStatus,
     DriverPeriodStatus,
@@ -1246,6 +1246,13 @@ class ListFilterTests(TestCase):
             last_name="Gone",
             status=DriverStatus.TERMINATED,
         )
+        self.ex_employee = Driver.objects.create(
+            first_name="Ex",
+            last_name="Employee",
+            driver_id="D-EX",
+            status=DriverStatus.PENDING,
+            employment_status=EmploymentStatus.TERMINATED,
+        )
         self.truck_otr = Truck.objects.create(
             unit_number="U-100",
             status=TruckStatus.OTR,
@@ -1263,6 +1270,13 @@ class ListFilterTests(TestCase):
         response = self.client.get("/drivers/")
         self.assertContains(response, "Anna Active")
         self.assertNotContains(response, "Tom Gone")
+        self.assertNotContains(response, "Ex Employee")
+
+    def test_drivers_employment_all_shows_ex_employee(self):
+        self.client.force_login(self.user)
+        response = self.client.get("/drivers/", {"employment": "all", "status": "all"})
+        self.assertContains(response, "Ex Employee")
+        self.assertContains(response, "Tom Gone")
 
     def test_drivers_search_and_status_filter(self):
         self.client.force_login(self.user)

@@ -223,6 +223,56 @@ class MasterSyncUpsertTests(TestCase):
         driver = Driver.objects.get(driver_id="300")
         self.assertEqual(driver.first_name, "Now")
         self.assertEqual(driver.employment_status, EmploymentStatus.TERMINATED)
+        self.assertEqual(driver.status, DriverStatus.TERMINATED)
+
+    def test_upsert_drivers_create_sets_ops_active(self):
+        result = master_sync.upsert_drivers_from_rows(
+            [
+                {
+                    "id": "301",
+                    "first_name": "New",
+                    "last_name": "Hire",
+                    "phone_cell": "",
+                    "phone_home": "",
+                    "email": "",
+                    "hire_date": None,
+                    "status": "ACTIVE",
+                    "is_company_driver": True,
+                }
+            ]
+        )
+        self.assertEqual(result.created, 1)
+        driver = Driver.objects.get(driver_id="301")
+        self.assertEqual(driver.status, DriverStatus.ACTIVE)
+        self.assertEqual(driver.employment_status, EmploymentStatus.ACTIVE)
+
+    def test_upsert_drivers_active_employment_does_not_clear_home_time(self):
+        Driver.objects.create(
+            driver_id="302",
+            first_name="Home",
+            last_name="Time",
+            employment_status=EmploymentStatus.ACTIVE,
+            status=DriverStatus.HOME_TIME,
+            driver_type=DriverType.COMPANY_DRIVER,
+        )
+        result = master_sync.upsert_drivers_from_rows(
+            [
+                {
+                    "id": "302",
+                    "first_name": "Home",
+                    "last_name": "Time",
+                    "phone_cell": "1",
+                    "phone_home": "",
+                    "email": "",
+                    "hire_date": None,
+                    "status": "ACTIVE",
+                    "is_company_driver": True,
+                }
+            ]
+        )
+        self.assertEqual(result.updated, 1)
+        driver = Driver.objects.get(driver_id="302")
+        self.assertEqual(driver.status, DriverStatus.HOME_TIME)
 
     def test_upsert_trucks_by_protransport_id_unit_change(self):
         Truck.objects.create(protransport_id="21", unit_number="OLD-1", make="OLD")

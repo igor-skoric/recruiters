@@ -4,14 +4,17 @@ from django import forms
 from django.db import transaction
 from django.utils import timezone
 
-from drivers.models import Driver, DriverStatus, DriverType
+from drivers.models import Driver, DriverStatus, DriverType, EmploymentStatus
 from relay.services import relay_service
 from trucks.models import Truck, TruckStatus
 
 
 def _active_drivers():
-    return Driver.objects.exclude(status=DriverStatus.TERMINATED).order_by(
-        "last_name", "first_name"
+    """Drivers selectable for assignments: on PT soft roster, not ops-terminated."""
+    return (
+        Driver.on_roster()
+        .exclude(status=DriverStatus.TERMINATED)
+        .order_by("last_name", "first_name")
     )
 
 

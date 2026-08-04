@@ -25,7 +25,13 @@ from accounts.permissions import (
     user_can_edit,
     user_has_full_access,
 )
-from drivers.models import Driver, DriverStatus, DriverType, EmploymentStatus
+from drivers.models import (
+    Driver,
+    DriverStatus,
+    DriverType,
+    EmploymentStatus,
+    INACTIVE_EMPLOYMENT_STATUSES,
+)
 from relay.forms import (
     DriverCreateForm,
     PlanNextAssignmentForm,
@@ -777,9 +783,15 @@ def _driver_list_filters(request) -> dict:
         queryset = queryset.exclude(status=DriverStatus.TERMINATED)
         status = ""
 
-    if employment and employment in EmploymentStatus.values:
+    # Soft PT roster: default hides terminated/inactive employment (rows stay in DB).
+    if employment == "all":
+        pass
+    elif employment and employment in EmploymentStatus.values:
         queryset = queryset.filter(employment_status=employment)
     else:
+        queryset = queryset.exclude(
+            employment_status__in=INACTIVE_EMPLOYMENT_STATUSES
+        )
         employment = ""
 
     if driver_type and driver_type in DriverType.values:

@@ -2,8 +2,10 @@
 Periodic Pro Transport master-data sync.
 
 Order: company_data → drivers → trucks.
-Never mutates RelayAssignment, DriverStatusPeriod, Truck.current_driver,
-or Fleet Planner operational statuses (Driver.status / Truck.status).
+Never mutates RelayAssignment, DriverStatusPeriod, or Truck.current_driver.
+Driver.status is only forced when PT employment becomes terminated/inactive
+(so the local roster matches PT active headcount); ACTIVE employment does not
+overwrite local home_time / planning ops status.
 """
 
 from __future__ import annotations
@@ -14,7 +16,13 @@ from django.db import transaction
 from django.utils import timezone
 
 from companies.models import CompanyData
-from drivers.models import Driver, DriverType, EmploymentStatus
+from drivers.models import (
+    Driver,
+    DriverStatus,
+    DriverType,
+    EmploymentStatus,
+    INACTIVE_EMPLOYMENT_STATUSES,
+)
 from relay.models import AssignmentStatus, RelayAssignment
 from sync.services.pro_transport_mapping import (
     COMPANY_DATA_SQL,
@@ -33,9 +41,7 @@ from sync.services.pro_transport_mapping import (
 )
 from trucks.models import Truck
 
-_INACTIVE_EMPLOYMENT = frozenset(
-    {EmploymentStatus.TERMINATED, EmploymentStatus.INACTIVE}
-)
+_INACTIVE_EMPLOYMENT = INACTIVE_EMPLOYMENT_STATUSES
 
 # Driver create allowlist for master sync — widen these later if needed.
 # Existing drivers (already linked by driver_id) are still updated so PT
@@ -65,6 +71,20 @@ def truck_allowed_for_import(*, source_is_active: bool | None) -> bool:
     if not IMPORT_TRUCKS_REQUIRE_SOURCE_ACTIVE:
         return True
     return source_is_active is True
+
+
+def ops_status_from_employment(employment_status: str) -> str | None:
+    """
+    Mirror PT employment into local ops status when employment leaves the roster.
+
+    ACTIVE employment does not force ops Active (home_time / planning stay local).
+    New creates use Active separately.
+    """
+    if employment_status == EmploymentStatus.TERMINATED:
+        return DriverStatus.TERMINATED
+    if employment_status == EmploymentStatus.INACTIVE:
+        return DriverStatus.INACTIVE
+    return None
 
 
 def _apply_fields(instance: Any, data: dict[str, Any], allowed: frozenset[str]) -> list[str]:
@@ -215,6 +235,7 @@ def upsert_drivers_from_rows(
             if existing is None and not allowed:
                 counts.skipped += 1
                 continue
+            forced_ops = ops_status_from_employment(data["employment_status"])
             if existing:
                 would_change = [
                     key
@@ -223,6 +244,8 @@ def upsert_drivers_from_rows(
                     and key in data
                     and getattr(existing, key) != data[key]
                 ]
+                if forced_ops and existing.status != forced_ops:
+                    would_change.append("status")
                 _warn_inactive_driver_with_active(
                     counts, existing, data["employment_status"]
                 )
@@ -234,6 +257,9 @@ def upsert_drivers_from_rows(
                     continue
                 with transaction.atomic():
                     changed = _apply_fields(existing, data, DRIVER_MASTER_FIELDS)
+                    if forced_ops and existing.status != forced_ops:
+                        existing.status = forced_ops
+                        changed = [*changed, "status"]
                     existing.last_synced_at = now
                     if changed:
                         existing.save(
@@ -258,6 +284,8 @@ def upsert_drivers_from_rows(
                         employment_status=data["employment_status"],
                         driver_type=data["driver_type"],
                         division=data["division"],
+                        # New PT-active company drivers enter the ops roster as Active.
+                        status=DriverStatus.ACTIVE,
                         last_synced_at=now,
                     )
                     counts.created += 1

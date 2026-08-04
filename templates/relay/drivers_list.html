@@ -43,7 +43,8 @@
             <div class="list-filter-field">
                 <label class="sr-only" for="driver-employment">Employment status</label>
                 <select id="driver-employment" class="form-control" name="employment" onchange="this.form.requestSubmit()">
-                    <option value="">Employment: All</option>
+                    <option value="">Employment: Active roster</option>
+                    <option value="all"{% if filters.employment == "all" %} selected{% endif %}>Employment: All</option>
                     {% for value, label in employment_choices %}
                         <option value="{{ value }}"{% if filters.employment == value %} selected{% endif %}>Employment: {{ label }}</option>
                     {% endfor %}

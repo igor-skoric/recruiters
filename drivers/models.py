@@ -20,6 +20,15 @@ class EmploymentStatus(models.TextChoices):
     UNKNOWN = "unknown", "Unknown"
 
 
+# Soft roster: keep rows in DB, hide inactive PT employment from default lists/forms.
+INACTIVE_EMPLOYMENT_STATUSES = frozenset(
+    {
+        EmploymentStatus.TERMINATED,
+        EmploymentStatus.INACTIVE,
+    }
+)
+
+
 class DriverType(models.TextChoices):
     COMPANY_DRIVER = "company_driver", "Company Driver"
     OWNER_OPERATOR = "owner_operator", "Owner Operator"
@@ -86,3 +95,14 @@ class Driver(models.Model):
     @property
     def full_name(self) -> str:
         return f"{self.first_name} {self.last_name}".strip()
+
+    @classmethod
+    def on_roster(cls):
+        """
+        Soft PT roster: exclude terminated/inactive employment.
+
+        Rows stay in the DB; they are hidden from default lists and pickers.
+        """
+        return cls.objects.exclude(
+            employment_status__in=INACTIVE_EMPLOYMENT_STATUSES
+        )

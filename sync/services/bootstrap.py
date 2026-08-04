@@ -21,7 +21,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils.dateparse import parse_date
 
-from drivers.models import Driver, EmploymentStatus
+from drivers.models import Driver, EmploymentStatus, INACTIVE_EMPLOYMENT_STATUSES
 from relay.models import AssignmentStatus, RelayAssignment
 from relay.services import relay_service
 from sync.services.master_sync import sync_master
@@ -39,9 +39,7 @@ ESTIMATED_START_NOTE = (
     "(default/cutover). Review and correct in UI if needed."
 )
 
-_INACTIVE_EMPLOYMENT = frozenset(
-    {EmploymentStatus.TERMINATED, EmploymentStatus.INACTIVE}
-)
+_INACTIVE_EMPLOYMENT = INACTIVE_EMPLOYMENT_STATUSES
 
 
 @dataclass

@@ -20,7 +20,9 @@ from drivers.models import DriverType, EmploymentStatus
 
 PRO_TRANSPORT_ALIAS = "pro_transport"
 
-# Master sync may update ONLY these Driver fields (never status / notes / planning).
+# Master sync may update ONLY these Driver fields (never notes / planning periods).
+# Ops Driver.status is mirrored only when PT employment leaves the active roster
+# (see ops_status_from_employment in master_sync).
 DRIVER_MASTER_FIELDS = frozenset(
     {
         "first_name",
